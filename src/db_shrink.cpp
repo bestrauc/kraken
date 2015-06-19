@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2014, Derrick Wood <dwood@cs.umd.edu>
+ * Copyright 2013-2015, Derrick Wood <dwood@cs.jhu.edu>
  *
  * This file is part of the Kraken taxonomic sequence classification system.
  *
@@ -25,81 +25,113 @@ using namespace std;
 using namespace kraken;
 
 string Input_DB_filename, Output_DB_filename;
-int Shrink_percentage = 0;
+uint64_t Output_count = 0;
+size_t Offset = 1;
 bool Operate_in_RAM = false;
 
 static void parse_command_line(int argc, char **argv);
 static void usage(int exit_code=EX_USAGE);
 
 int main(int argc, char **argv) {
-  #ifdef _OPENMP
-  omp_set_num_threads(1);
-  #endif
-
   parse_command_line(argc, argv);
+  
+  uint64_t key_bits, val_len, key_count, key_len;
+  uint64_t pair_size;
 
-  QuickFile input_db_file(Input_DB_filename);
-  KrakenDB input_db(input_db_file.ptr());
+  // NOTE: Skipping the KrakenDB use here does make the code a
+  //   bit redundant and messy, but it keeps the memory footprint
+  //   low, which is important for this particular program.
 
-  size_t new_file_size = input_db.header_size();
-  uint64_t key_ct = input_db.get_key_ct();
-  uint64_t new_key_ct = key_ct * Shrink_percentage / 100;
-  uint64_t pair_size = input_db.pair_size();
-  new_file_size += new_key_ct * pair_size;
-
-  QuickFile output_file;
-  char *temp_file = NULL;
-  char *outptr;
-  if (Operate_in_RAM) {
-    temp_file = new char[new_file_size];
+  // Check file magic and get metadata to calculate header size
+  char *buffer = new char[8];
+  ifstream input_file(Input_DB_filename.c_str(), std::ifstream::binary);
+  input_file.read(buffer, 8);
+  if (strncmp("JFLISTDN", buffer, 8) != 0) {
+    errx(EX_DATAERR, "input file not Jellyfish v1 database");
   }
-  else {
-    output_file.open_file(Output_DB_filename, "rw", new_file_size);
-    temp_file = output_file.ptr();
+  input_file.read(buffer, 8);
+  memcpy(&key_bits, buffer, 8);
+  size_t header_size = 72 + 2 * (4 + 8 * key_bits);
+  delete buffer;
+
+  // Read in header and get remaining metadata
+  buffer = new char[header_size];
+  input_file.seekg(0, ios_base::beg);
+  input_file.read(buffer, header_size);
+  memcpy(&val_len, buffer + 16, 8);
+  memcpy(&key_count, buffer + 48, 8);
+  key_len = key_bits / 8 + !! (key_bits % 8);
+  pair_size = key_len + val_len;
+
+  if (Output_count > key_count) {
+    errx(EX_DATAERR, "Requested new key count %llu larger than old key count %llu, aborting...",
+                      (long long unsigned int) Output_count,
+                      (long long unsigned int) key_count);
   }
-  outptr = temp_file;
-  // Copy input header to output file
-  memcpy(outptr, input_db.get_ptr(), input_db.header_size());
+
   // Change key count
-  memcpy(outptr + 48, &new_key_ct, 8);
-  outptr += input_db.header_size();
+  memcpy(buffer + 48, &Output_count, 8);
 
-  char *inptr = input_db.get_pair_ptr();
-  // For each 100 consecutive pairs, select the last P pairs of the block
-  for (uint64_t i = 0; i < new_key_ct; i += Shrink_percentage) {
-    inptr += (100 - Shrink_percentage) * pair_size;
-    outptr += Shrink_percentage * pair_size;
-    memcpy(outptr, inptr, Shrink_percentage * pair_size);
-    inptr += Shrink_percentage * pair_size;
+  // Copy input header to output file
+  ofstream output_file(Output_DB_filename.c_str(), std::ofstream::binary);
+  output_file.write(buffer, header_size);
+
+  delete buffer;
+
+  // Prep buffer for scan/select loop
+  // We select one pair (the last) per "block"
+  size_t block_size = key_count / Output_count;
+  if (block_size < Offset) {
+    errx(EX_DATAERR, "offset %llu larger than block size %llu, aborting.",
+         (long long unsigned int) Offset,
+         (long long unsigned int) block_size);
   }
+  // Some blocks have an extra element
+  size_t odd_block_count = key_count % Output_count;
+  buffer = new char[pair_size * (block_size + 1)];
+  size_t remaining_input_pairs = key_count;
+  size_t current_output_count = 0;
 
-  input_db_file.close_file();
+  while (remaining_input_pairs) {
+    size_t pairs_to_read;
+    if (odd_block_count == 0) {
+      pairs_to_read = block_size;
+    }
+    else {
+      pairs_to_read = block_size + 1;
+      odd_block_count--;
+    }
 
-  if (Operate_in_RAM) {
-    // Actual file hasn't been opened yet if -M used
-    output_file.open_file(Output_DB_filename, "w", new_file_size);
-    memcpy(output_file.ptr(), temp_file, new_file_size);
-    delete temp_file;
+    input_file.read(buffer, pairs_to_read * pair_size);
+    remaining_input_pairs -= pairs_to_read;
+
+    output_file.write(buffer + pair_size * (pairs_to_read - Offset), pair_size);
+    current_output_count++;
+    if (current_output_count % 10000 == 0) {
+      cerr << "\rWritten " << current_output_count << "/" << Output_count << " k-mers to new file";
+    }
   }
+  cerr << "\rWrote " << current_output_count << "/" << Output_count << " k-mers to new file  \n";
 
-  output_file.close_file();
+  input_file.close();
+  output_file.close();
 
   return 0;
 }
 
 void parse_command_line(int argc, char **argv) {
   int opt;
-  int sig;
+  long long sig;
 
   if (argc > 1 && strcmp(argv[1], "-h") == 0)
     usage(0);
-  while ((opt = getopt(argc, argv, "d:o:p:M")) != -1) {
+  while ((opt = getopt(argc, argv, "d:o:n:O:")) != -1) {
     switch (opt) {
-      case 'p' :
-        sig = atoi(optarg);
-        if (sig < 1 || sig >= 100)
-          errx(EX_USAGE, "shrink percentage out of range");
-        Shrink_percentage = sig;
+      case 'n' :
+        sig = atoll(optarg);
+        if (sig < 1)
+          errx(EX_USAGE, "output count must be positive");
+        Output_count = sig;
         break;
       case 'd' :
         Input_DB_filename = optarg;
@@ -107,8 +139,11 @@ void parse_command_line(int argc, char **argv) {
       case 'o' :
         Output_DB_filename = optarg;
         break;
-      case 'M' :
-        Operate_in_RAM = true;
+      case 'O' :
+        sig = atoll(optarg);
+        if (sig < 1)
+          errx(EX_USAGE, "offset count cannot be negative");
+        Offset = sig;
         break;
       default:
         usage();
@@ -116,11 +151,11 @@ void parse_command_line(int argc, char **argv) {
     }
   }
 
-  if (Input_DB_filename.empty() || Output_DB_filename.empty() || ! Shrink_percentage)
+  if (Input_DB_filename.empty() || Output_DB_filename.empty() || ! Output_count)
     usage();
 }
 
 void usage(int exit_code) {
-  cerr << "Usage: db_shrink [-M] <-d input db> <-o output db> <-p percentage>\n";
+  cerr << "Usage: db_shrink [-O offset] <-d input db> <-o output db> <-n output count>\n";
   exit(exit_code);
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2014, Derrick Wood <dwood@cs.umd.edu>
+ * Copyright 2013-2015, Derrick Wood <dwood@cs.jhu.edu>
  *
  * This file is part of the Kraken taxonomic sequence classification system.
  *
@@ -59,9 +59,13 @@ int main(int argc, char **argv) {
   KmerScanner::set_k(Database.get_k());
 
   char *temp_ptr = NULL;
+  size_t db_file_size = db_file.size();
   if (Operate_in_RAM) {
-    temp_ptr = new char[ db_file.size() ];
-    memcpy(temp_ptr, db_file.ptr(), db_file.size());
+    db_file.close_file();
+    temp_ptr = new char[ db_file_size ];
+    ifstream ifs(DB_filename.c_str(), ifstream::binary);
+    ifs.read(temp_ptr, db_file_size);
+    ifs.close();
     Database = KrakenDB(temp_ptr);
   }
 
@@ -75,7 +79,9 @@ int main(int argc, char **argv) {
     process_files();
 
   if (Operate_in_RAM) {
-    memcpy(db_file.ptr(), temp_ptr, db_file.size());
+    ofstream ofs(DB_filename.c_str(), ofstream::binary);
+    ofs.write(temp_ptr, db_file_size);
+    ofs.close();
     delete temp_ptr;
   }
 
@@ -180,7 +186,7 @@ void set_lcas(uint32_t taxid, string &seq, size_t start, size_t finish) {
 
 void parse_command_line(int argc, char **argv) {
   int opt;
-  int sig;
+  long long sig;
 
   if (argc > 1 && strcmp(argv[1], "-h") == 0)
     usage(0);
@@ -202,10 +208,12 @@ void parse_command_line(int argc, char **argv) {
         ID_to_taxon_map_filename = optarg;
         break;
       case 't' :
-        sig = atoi(optarg);
+        sig = atoll(optarg);
         if (sig <= 0)
           errx(EX_USAGE, "can't use nonpositive thread count");
         #ifdef _OPENMP
+        if (sig > omp_get_num_procs())
+          errx(EX_USAGE, "thread count exceeds number of processors");
         Num_threads = sig;
         omp_set_num_threads(Num_threads);
         #endif

@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/perl
 
 # Copyright 2013-2015, Derrick Wood <dwood@cs.jhu.edu>
 #
@@ -17,19 +17,38 @@
 # You should have received a copy of the GNU General Public License
 # along with Kraken.  If not, see <http://www.gnu.org/licenses/>.
 
-# Check that jellyfish is executable and is proper version
-# Designed to be called by kraken-build
+# Checks each sequence header to ensure it has a GI number to
+# enable taxonomic ID lookup later.  Also has some (very basic)
+# FASTA-format checking.
 
-set -u  # Protect against uninitialized vars.
-set -e  # Stop on error
-set -o pipefail  # Stop on failures in non-final pipeline commands
+use strict;
+use warnings;
+use File::Basename;
 
-JELLYFISH_VERSION=$(jellyfish --version | awk '{print $2}')
-if [[ $JELLYFISH_VERSION =~ ^1\. ]]
-then
-  echo "Found jellyfish v$JELLYFISH_VERSION"
-else
-  echo "Found jellyfish v$JELLYFISH_VERSION"
-  echo "Kraken requires jellyfish version 1"
-  exit 1
-fi
+my $PROG = basename $0;
+
+die "$PROG: must specify one filename!\n" if @ARGV != 1;
+
+my $filename = shift;
+
+open FASTA, "<", $filename
+  or die "$PROG: can't open $filename: $!\n";
+my $seq_ct = 0;
+my $errors = 0;
+while (<FASTA>) {
+  next unless /^>/;
+  $seq_ct++;
+  if (! /^>(\S+)/) {
+    $errors++;
+    warn "file $filename, line $. lacks sequence ID\n";
+  }
+  if ($1 !~ /(^|\|)(gi|kraken:taxid)\|(\d+)/) {
+    $errors++;
+    warn "file $filename, line $.: sequence ID lacks GI number\n";
+  }
+}
+close FASTA;
+
+if ($errors) {
+  exit 1;
+}

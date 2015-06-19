@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2014, Derrick Wood <dwood@cs.umd.edu>
+ * Copyright 2013-2015, Derrick Wood <dwood@cs.jhu.edu>
  *
  * This file is part of the Kraken taxonomic sequence classification system.
  *
@@ -53,6 +53,7 @@ bool Print_classified = false;
 bool Print_unclassified = false;
 bool Print_kraken = true;
 bool Populate_memory = false;
+bool Only_classified_kraken_output = false;
 uint32_t Minimum_hit_count = 1;
 map<uint32_t, uint32_t> Parent_map;
 KrakenDB Database;
@@ -166,52 +167,48 @@ void process_file(char *filename) {
   else
     reader = new BCLReader(file_str, length);
 
-  vector<DNASequence> work_units[Num_threads];
-  ostringstream kraken_output[Num_threads],
-    classified_output[Num_threads],
-    unclassified_output[Num_threads];
-  while (reader->is_valid()) {
-    // Get work for each thread
-    for (int i = 0; i < Num_threads; i++) {
-      work_units[i].clear();
+  #pragma omp parallel
+  {
+    vector<DNASequence> work_unit;
+    ostringstream kraken_output_ss, classified_output_ss, unclassified_output_ss;
+
+    while (reader->is_valid()) {
+      work_unit.clear();
       size_t total_nt = 0;
-      while (total_nt < Work_unit_size) {
-        dna = reader->next_sequence();
-        if (! reader->is_valid())
-          break;
-        total_sequences++;
-        work_units[i].push_back(dna);
-        total_nt += dna.seq.size();
+      #pragma omp critical(get_input)
+      {
+        while (total_nt < Work_unit_size) {
+          dna = reader->next_sequence();
+          if (! reader->is_valid())
+            break;
+          work_unit.push_back(dna);
+          total_nt += dna.seq.size();
+        }
       }
-      total_bases += total_nt;
-    }
+      if (total_nt == 0)
+        break;
+      
+      kraken_output_ss.str("");
+      classified_output_ss.str("");
+      unclassified_output_ss.str("");
+      for (size_t j = 0; j < work_unit.size(); j++)
+        classify_sequence( work_unit[j], kraken_output_ss,
+                           classified_output_ss, unclassified_output_ss );
 
-    // Classification loop
-    #pragma omp parallel for
-    for (int i = 0; i < Num_threads; i++) {
-      if (Print_kraken)
-        kraken_output[i].str("");
-      if (Print_classified)
-        classified_output[i].str("");
-      if (Print_unclassified)
-        unclassified_output[i].str("");
-      for (size_t j = 0; j < work_units[i].size(); j++)
-        classify_sequence( work_units[i][j], kraken_output[i],
-                           classified_output[i], unclassified_output[i] );
+      #pragma omp critical(write_output)
+      {
+        if (Print_kraken)
+          (*Kraken_output) << kraken_output_ss.str();
+        if (Print_classified)
+          (*Classified_output) << classified_output_ss.str();
+        if (Print_unclassified)
+          (*Unclassified_output) << unclassified_output_ss.str();
+        total_sequences += work_unit.size();
+        total_bases += total_nt;
+        cerr << "\rProcessed " << total_sequences << " sequences (" << total_bases << " bp) ...";
+      }
     }
-
-    // Report loop
-    for (int i = 0; i < Num_threads; i++) {
-      if (Print_kraken)
-        (*Kraken_output) << kraken_output[i].str();
-      if (Print_classified)
-        (*Classified_output) << classified_output[i].str();
-      if (Print_unclassified)
-        (*Unclassified_output) << unclassified_output[i].str();
-    }
-    
-    cerr << "\rProcessed " << total_sequences << " sequences (" << total_bases << " bp) ...";
-  }
+  }  // end parallel section
 
   delete reader;
 }
@@ -269,13 +266,13 @@ void classify_sequence(DNASequence &dna, ostringstream &koss,
     bool print = call ? Print_classified : Print_unclassified;
     if (print) {
       if (Fastq_input) {
-        (*oss_ptr) << "@" << dna.id << endl
+        (*oss_ptr) << "@" << dna.header_line << endl
             << dna.seq << endl
             << "+" << endl
             << dna.quals << endl;
       }
       else {
-        (*oss_ptr) << ">" << dna.id << endl
+        (*oss_ptr) << ">" << dna.header_line << endl
             << dna.seq << endl;
       }
     }
@@ -288,6 +285,8 @@ void classify_sequence(DNASequence &dna, ostringstream &koss,
     koss << "C\t";
   }
   else {
+    if (Only_classified_kraken_output)
+      return;
     koss << "U\t";
   }
   koss << dna.id << "\t" << call << "\t" << dna.seq.size() << "\t";
@@ -354,7 +353,7 @@ set<uint32_t> get_ancestry(uint32_t taxon) {
 
 void parse_command_line(int argc, char **argv) {
   int opt;
-  int sig;
+  long long sig;
 
   if (argc > 1 && strcmp(argv[1], "-h") == 0)
     usage(0);
@@ -367,10 +366,12 @@ void parse_command_line(int argc, char **argv) {
         Index_filename = optarg;
         break;
       case 't' :
-        sig = atoi(optarg);
+        sig = atoll(optarg);
         if (sig <= 0)
           errx(EX_USAGE, "can't use nonpositive thread count");
         #ifdef _OPENMP
+        if (sig > omp_get_num_procs())
+          errx(EX_USAGE, "thread count exceeds number of processors");
         Num_threads = sig;
         omp_set_num_threads(Num_threads);
         #endif
@@ -382,7 +383,7 @@ void parse_command_line(int argc, char **argv) {
         Quick_mode = true;
         break;
       case 'm' :
-        sig = atoi(optarg);
+        sig = atoll(optarg);
         if (sig <= 0)
           errx(EX_USAGE, "can't use nonpositive minimum hit count");
         Minimum_hit_count = sig;
@@ -394,6 +395,9 @@ void parse_command_line(int argc, char **argv) {
       // ADDED
       case 'b' :
         File_input = BCL;
+        break;
+      case 'c' :
+        Only_classified_kraken_output = true;
         break;
       case 'C' :
         Print_classified = true;
@@ -407,7 +411,7 @@ void parse_command_line(int argc, char **argv) {
         Kraken_output_file = optarg;
         break;
       case 'u' :
-        sig = atoi(optarg);
+        sig = atoll(optarg);
         if (sig <= 0)
           errx(EX_USAGE, "can't use nonpositive work unit size");
         Work_unit_size = sig;
@@ -457,6 +461,7 @@ void usage(int exit_code) {
        << "  -C filename      Print classified sequences" << endl
        << "  -U filename      Print unclassified sequences" << endl
        << "  -f               Input is in FASTQ format" << endl
+       << "  -c               Only include classified reads in output" << endl
        << "  -M               Preload database files" << endl
        << "  -h               Print this message" << endl
        << endl

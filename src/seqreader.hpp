@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2014, Derrick Wood <dwood@cs.umd.edu>
+ * Copyright 2013-2015, Derrick Wood <dwood@cs.jhu.edu>
  *
  * This file is part of the Kraken taxonomic sequence classification system.
  *
@@ -33,6 +33,7 @@ using namespace boost::filesystem;
 namespace kraken {
   typedef struct {
     std::string id;
+    std::string header_line;  // id + optional description
     std::string seq;
     std::string quals;
   } DNASequence;

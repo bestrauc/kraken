@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 
-# Copyright 2013-2014, Derrick Wood <dwood@cs.umd.edu>
+# Copyright 2013-2015, Derrick Wood <dwood@cs.jhu.edu>
 #
 # This file is part of the Kraken taxonomic sequence classification system.
 #
@@ -17,7 +17,16 @@
 # You should have received a copy of the GNU General Public License
 # along with Kraken.  If not, see <http://www.gnu.org/licenses/>.
 
-# Split a multi-fasta .ffn file into many single-fasta .fna files
+# Reads multi-FASTA input and for each sequence ID reports a
+# tab-delimited line:
+#   <GI number> <sequence ID>
+# 
+#   or in the case of a sequence with Kraken taxid information:
+#
+#   TAXID <taxonomy ID> <sequence ID>
+#
+# Assumes all sequence IDs actually have GI numbers or Kraken
+# taxid information.
 
 use strict;
 use warnings;
@@ -25,31 +34,16 @@ use File::Basename;
 
 my $PROG = basename $0;
 
-die "$PROG: must specify one filename!\n" if @ARGV != 1;
-
-my $filename = shift;
-
-my ($prefix, $extension);
-if ($filename =~ /^(.*)\.ffn$/) {
-  $prefix = $1;
-}
-else {
-  die "$PROG: can't determine prefix!\n";
-}
-$extension = "fna";
-
-my $ct = 0;
-open MULTI, "<", $filename
-  or die "$PROG: can't read $filename: $!\n";
-while (<MULTI>) {
-  if (/^>/) {
-    close SINGLE if $ct;
-    my $new_filename = "$prefix.$ct.$extension";
-    open SINGLE, ">", $new_filename
-      or die "$PROG: can't write to $new_filename: $!\n";
-    $ct++;
+while (<>) {
+  next unless /^>(\S+)/;
+  my $seq_id = $1;
+  if ($seq_id =~ /(^|\|)kraken:taxid\|(\d+)/) {
+    print "TAXID\t$2\t$seq_id\n";
+    next;
   }
-  print SINGLE;
+
+  if ($seq_id !~ /(^|\|)gi\|(\d+)/) {
+    die "$PROG: sequence ID $seq_id lacks GI number, aborting.\n";
+  }
+  print "$2\t$seq_id\n";
 }
-close SINGLE;
-close MULTI;

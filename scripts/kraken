@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 
-# Copyright 2013-2014, Derrick Wood <dwood@cs.umd.edu>
+# Copyright 2013-2015, Derrick Wood <dwood@cs.jhu.edu>
 #
 # This file is part of the Kraken taxonomic sequence classification system.
 #
@@ -33,6 +33,7 @@ if (! -e "$KRAKEN_DIR/classify") {
   $KRAKEN_DIR = dirname abs_path($0);
 }
 
+require "$KRAKEN_DIR/krakenlib.pm";
 $ENV{"KRAKEN_DIR"} = $KRAKEN_DIR;
 $ENV{"PATH"} = "$KRAKEN_DIR:$ENV{PATH}";
 
@@ -45,11 +46,13 @@ my $min_hits = 1;
 my $fasta_input = 0;
 my $fastq_input = 0;
 my $db_prefix;
-my $threads = 1;
+my $threads;
 my $preload = 0;
 my $gunzip = 0;
 my $bunzip2 = 0;
 my $paired = 0;
+my $check_names = 0;
+my $only_classified_output = 0;
 my $unclassified_out;
 my $classified_out;
 my $outfile;
@@ -68,17 +71,23 @@ GetOptions(
   "output=s" => \$outfile,
   "preload" => \$preload,
   "paired" => \$paired,
+  "check-names" => \$check_names,
   "gzip-compressed" => \$gunzip,
-  "bzip2-compressed" => \$bunzip2
+  "bzip2-compressed" => \$bunzip2,
+  "only-classified-output" => \$only_classified_output,
 );
 
-if (! defined $db_prefix) {
-  die "$PROG: must specify database name with --db\n";
+if (! defined $threads) {
+  $threads = $ENV{"KRAKEN_NUM_THREADS"} || 1;
 }
 
 if (! @ARGV) {
   print STDERR "Need to specify input filenames!\n";
   usage();
+}
+eval { $db_prefix = krakenlib::find_db($db_prefix); };
+if ($@) {
+  die "$PROG: $@";
 }
 
 my $taxonomy = "$db_prefix/taxonomy/nodes.dmp";
@@ -134,6 +143,7 @@ push @flags, "-f" if $fastq_input && ! $paired;  # merger always outputs FASTA
 push @flags, "-U", $unclassified_out if defined $unclassified_out;
 push @flags, "-C", $classified_out if defined $classified_out;
 push @flags, "-o", $outfile if defined $outfile;
+push @flags, "-c", if $only_classified_output;
 push @flags, "-M" if $preload;
 
 # handle piping for decompression/merging
@@ -144,6 +154,7 @@ if ($paired) {
   push @merge_flags, "--fq" if $fastq_input;
   push @merge_flags, "--gz" if $gunzip;
   push @merge_flags, "--bz2" if $bunzip2;
+  push @merge_flags, "--check-names" if $check_names;
   @pipe_argv = ("read_merger.pl", @merge_flags, @ARGV);
 }
 elsif ($compressed) {
@@ -187,12 +198,16 @@ die "$PROG: exec error: $!\n";
 
 sub usage {
   my $exit_code = @_ ? shift : 64;
+  my $default_db = "none";
+  eval { $default_db = '"' . krakenlib::find_db() . '"'; };
+  my $def_thread_ct = exists $ENV{"KRAKEN_NUM_THREADS"} ? (0 + $ENV{"KRAKEN_NUM_THREADS"}) : 1;
   print STDERR <<EOF;
 Usage: $PROG [options] <filename(s)>
 
 Options:
   --db NAME               Name for Kraken DB
-  --threads NUM           Number of threads
+                          (default: $default_db)
+  --threads NUM           Number of threads (default: $def_thread_ct)
   --fasta-input           Input is FASTA format
   --fastq-input           Input is FASTQ format
   --gzip-compressed       Input is gzip compressed
@@ -204,10 +219,14 @@ Options:
                           Print unclassified sequences to filename
   --classified-out FILENAME
                           Print classified sequences to filename
-  --output FILENAME       Print output to filename (def. is stdout); "-" will
+  --output FILENAME       Print output to filename (default: stdout); "-" will
                           suppress normal output
+  --only-classified-output
+                          Print no Kraken output for unclassified sequences
   --preload               Loads DB into memory before classification
   --paired                The two filenames provided are paired-end reads
+  --check-names           Ensure each pair of reads have names that agree
+                          with each other; ignored if --paired is not specified
   --help                  Print this message
   --version               Print version information
 
@@ -223,7 +242,7 @@ sub display_help {
 
 sub display_version {
   print "Kraken version #####=VERSION=#####\n";
-  print "Copyright 2013-2014, Derrick Wood (dwood\@cs.umd.edu)\n";
+  print "Copyright 2013-2015, Derrick Wood (dwood\@cs.jhu.edu)\n";
   exit 0;
 }
 

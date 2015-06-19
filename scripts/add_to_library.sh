@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Copyright 2013-2014, Derrick Wood <dwood@cs.umd.edu>
+# Copyright 2013-2015, Derrick Wood <dwood@cs.jhu.edu>
 #
 # This file is part of the Kraken taxonomic sequence classification system.
 #
@@ -35,23 +35,15 @@ then
   exit 1
 fi
 
-if ! (grep '^>' "$1" | perl -nle 'exit 1 if ! /^>gi\|\d+\|/')
+if ! verify_gi_numbers.pl "$1"
 then
   echo "Can't add \"$1\": sequence is missing GI number"
   exit 1
 fi
 
-seq_ct=$(grep -c -m2 '^>' "$1")
-
 add_dir="$LIBRARY_DIR/added"
 mkdir -p "$add_dir"
 
-if (( seq_ct > 1 ))
-then
-  filename=$(cp_into_tempfile.pl -t "XXXXXXXXXX" -d "$add_dir" -s ffn "$1")
-  fasta_split.pl "$filename"
-else
-  filename=$(cp_into_tempfile.pl -t "XXXXXXXXXX" -d "$add_dir" -s fna "$1")
-fi
+filename=$(cp_into_tempfile.pl -t "XXXXXXXXXX" -d "$add_dir" -s fna "$1")
 
 echo "Added \"$1\" to library ($KRAKEN_DB_NAME)"

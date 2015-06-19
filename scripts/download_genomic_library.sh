@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Copyright 2013-2014, Derrick Wood <dwood@cs.umd.edu>
+# Copyright 2013-2015, Derrick Wood <dwood@cs.jhu.edu>
 #
 # This file is part of the Kraken taxonomic sequence classification system.
 #
@@ -20,6 +20,7 @@
 # Download specific genomic libraries for use with Kraken.
 # Supported choices are:
 #   bacteria - NCBI RefSeq complete bacterial/archaeal genomes
+#   plasmids - NCBI RefSeq plasmid sequences
 #   viruses - NCBI RefSeq complete viral DNA and RNA genomes
 #   human - NCBI RefSeq GRCh38 human reference genome
 
@@ -49,6 +50,22 @@ case "$1" in
       echo "Skipping download of bacterial genomes, already downloaded here."
     fi
     ;;
+  "plasmids")
+    mkdir -p $LIBRARY_DIR/Plasmids
+    cd $LIBRARY_DIR/Plasmids
+    if [ ! -e "lib.complete" ]
+    then
+      rm -f plasmids.all.fna.tar.gz
+      wget $FTP_SERVER/genomes/Plasmids/plasmids.all.fna.tar.gz
+      echo -n "Unpacking..."
+      tar zxf plasmids.all.fna.tar.gz
+      rm plasmids.all.fna.tar.gz
+      echo " complete."
+      touch "lib.complete"
+    else
+      echo "Skipping download of plasmids, already downloaded here."
+    fi
+    ;;
   "viruses")
     mkdir -p $LIBRARY_DIR/Viruses
     cd $LIBRARY_DIR/Viruses
@@ -63,7 +80,6 @@ case "$1" in
       tar zxf all.ffn.tar.gz
       rm all.fna.tar.gz
       rm all.ffn.tar.gz
-      find . -name '*.ffn' -print0 | xargs -0 -n1 fasta_split.pl
       echo " complete."
       touch "lib.complete"
     else
@@ -84,27 +100,20 @@ case "$1" in
       for directory in $directories
       do
         wget --spider --no-remove-listing $FTP_SERVER/genomes/H_sapiens/$directory/
-        file=$(perl -nle '/^-/ and /\b(hs_ref_GRCh\w+\.fa\.gz)\s*$/ and print $1' .listing)
+        file=$(perl -nle '/^-/ and /\b(hs_ref_GRCh\S+\.fa\.gz)\s*$/ and print $1' .listing)
         [ -z "$file" ] && exit 1
         rm .listing
         wget $FTP_SERVER/genomes/H_sapiens/$directory/$file
         gunzip "$file"
       done
 
-      # Move back to original directory so --add-to-library adds to correct dir
-      cd -
-      for file in $LIBRARY_DIR/Human/*.fa
-      do
-        kraken-build --db "$KRAKEN_DB_NAME" --add-to-library "$file"
-      done
-
-      touch "$LIBRARY_DIR/Human/lib.complete"
+      touch "lib.complete"
     else
       echo "Skipping download of human genome, already downloaded here."
     fi
     ;;
   *)
     echo "Unsupported library.  Valid options are: "
-    echo "  bacteria virus human"
+    echo "  bacteria plasmids virus human"
     ;;
 esac

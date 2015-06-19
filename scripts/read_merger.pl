@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 
-# Copyright 2013-2014, Derrick Wood <dwood@cs.umd.edu>
+# Copyright 2013-2015, Derrick Wood <dwood@cs.jhu.edu>
 #
 # This file is part of the Kraken taxonomic sequence classification system.
 #
@@ -31,22 +31,26 @@ my $fasta_input = 0;
 my $fastq_input = 0;
 my $gunzip = 0;
 my $bunzip2 = 0;
+my $check_names = 0;
 
 GetOptions(
   "fa" => \$fasta_input,
   "fq" => \$fastq_input,
   "gz" => \$gunzip,
-  "bz2" => \$bunzip2
+  "bz2" => \$bunzip2,
+  "check-names" => \$check_names
 );
 
 if (@ARGV != 2) {
   die "$PROG: must have exactly two filename arguments\n";
 }
-if (! -f $ARGV[0]) {
-  die "$PROG: $ARGV[0] must be regular file\n";
-}
-if (! -f $ARGV[1]) {
-  die "$PROG: $ARGV[1] must be regular file\n";
+for my $file (@ARGV) {
+  if (! -e $file) {
+    die "$PROG: $file does not exist\n";
+  } 
+  if (! -f $file) {
+    die "$PROG: $file is not a regular file\n";
+  }
 }
 
 my $compressed = $gunzip || $bunzip2;
@@ -86,7 +90,7 @@ while (defined($seq1 = read_sequence($fh1))) {
   if (! defined $seq2) {
     die "$PROG: mismatched sequence counts\n";
   }
-  if ($seq1->{id} ne $seq2->{id}) {
+  if ($check_names && $seq1->{id} ne $seq2->{id}) {
     die "$PROG: mismatched mate pair names ('$seq1->{id}' & '$seq2->{id}')\n";
   }
   print_merged_sequence($seq1, $seq2);

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Copyright 2013-2014, Derrick Wood <dwood@cs.umd.edu>
+# Copyright 2013-2015, Derrick Wood <dwood@cs.jhu.edu>
 #
 # This file is part of the Kraken taxonomic classification system.
 #
@@ -19,7 +19,7 @@
 
 set -e
 
-VERSION="0.10.5-beta"
+VERSION="0.10.6-unreleased"
 
 if [ -z "$1" ] || [ -n "$2" ]
 then
@@ -38,17 +38,19 @@ fi
 # on OS X.
 export KRAKEN_DIR=$(perl -MCwd=abs_path -le 'print abs_path(shift)' "$1")
 
-(cd src && make)
 mkdir -p "$KRAKEN_DIR"
+make -C src install
 for file in scripts/*
 do
   perl -pl -e 'BEGIN { while (@ARGV) { $_ = shift; ($k,$v) = split /=/, $_, 2; $H{$k} = $v } }'\
            -e 's/#####=(\w+)=#####/$H{$1}/g' \
            "KRAKEN_DIR=$KRAKEN_DIR" "VERSION=$VERSION" \
            < "$file" > "$KRAKEN_DIR/$(basename $file)"
+  if [ -x "$file" ]
+  then
+    chmod +x "$KRAKEN_DIR/$(basename $file)"
+  fi
 done
-make -C src install
-chmod -R +x "$KRAKEN_DIR"
 
 echo
 echo "Kraken installation complete."
@@ -57,5 +59,8 @@ echo "To make things easier for you, you may want to copy/symlink the following"
 echo "files into a directory in your PATH:"
 for file in $KRAKEN_DIR/kraken*
 do
-  echo "  $file"
+  if [ -x "$file" ]
+  then
+    echo "  $file"
+  fi
 done
