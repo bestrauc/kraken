@@ -21,6 +21,14 @@
 #define SEQREADER_HPP
 
 #include "kraken_headers.hpp"
+#include "Queue.h"
+#include <boost/filesystem.hpp>
+#include <iostream>
+#include <memory>
+#include <thread>
+#include <algorithm>
+
+using namespace boost::filesystem;
 
 namespace kraken {
   typedef struct {
@@ -57,6 +65,33 @@ namespace kraken {
     private:
     std::ifstream file;
     bool valid;
+  };
+
+  class BCLReader : public DNASequenceReader {
+    public:
+    typedef std::vector<DNASequence> TDNABuffer;
+
+    BCLReader(std::string filename);
+    BCLReader(std::string filename, int length);
+    DNASequence next_sequence();
+    bool is_valid();
+
+    private:
+    Queue<std::unique_ptr<TDNABuffer> > concurrentBufferQueue;
+    std::unique_ptr<TDNABuffer> sequenceBuffer;
+    std::vector<path> cyclePaths;
+    boost::filesystem::directory_iterator lane_dir_iter;
+    path basecalls_path;
+
+    int tile_num;
+    int lane_num;
+    bool valid, _valid;
+    int read_length;
+
+    bool fillSequenceBuffer();
+    void addSequenceBuffer(int lane_num, int tile_num, std::vector<path> &cyclePaths);
+    void getCyclePaths();
+    void init(std::string filename);
   };
 }
 

@@ -41,6 +41,14 @@ int Num_threads = 1;
 string DB_filename, Index_filename, Nodes_filename;
 bool Quick_mode = false;
 bool Fastq_input = false;
+
+// Kraken modifications here
+enum Input_mode {FASTQ, FASTA, BCL};
+Input_mode File_input = FASTA;
+
+size_t length = -1;
+// ------------------------
+
 bool Print_classified = false;
 bool Print_unclassified = false;
 bool Print_kraken = true;
@@ -150,10 +158,13 @@ void process_file(char *filename) {
   DNASequenceReader *reader;
   DNASequence dna;
 
-  if (Fastq_input)
+  //if (Fastq_input)
+  if (File_input == FASTQ)
     reader = new FastqReader(file_str);
-  else
+  else if (File_input == FASTA)
     reader = new FastaReader(file_str);
+  else
+    reader = new BCLReader(file_str, length);
 
   vector<DNASequence> work_units[Num_threads];
   ostringstream kraken_output[Num_threads],
@@ -347,7 +358,7 @@ void parse_command_line(int argc, char **argv) {
 
   if (argc > 1 && strcmp(argv[1], "-h") == 0)
     usage(0);
-  while ((opt = getopt(argc, argv, "d:i:t:u:n:m:o:qfC:U:M")) != -1) {
+  while ((opt = getopt(argc, argv, "d:i:t:u:n:m:o:qfbC:U:Ml:")) != -1) {
     switch (opt) {
       case 'd' :
         DB_filename = optarg;
@@ -378,6 +389,11 @@ void parse_command_line(int argc, char **argv) {
         break;
       case 'f' :
         Fastq_input = true;
+        File_input = FASTQ;
+        break;
+      // ADDED
+      case 'b' :
+        File_input = BCL;
         break;
       case 'C' :
         Print_classified = true;
@@ -399,6 +415,10 @@ void parse_command_line(int argc, char **argv) {
       case 'M' :
         Populate_memory = true;
         break;
+      // ADDED 
+      case 'l' : 
+        length = atoi(optarg);
+        break;  
       default:
         usage();
         break;
