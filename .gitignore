@@ -6,3 +6,6 @@ src/db_shrink
 src/db_sort
 src/make_seqid_to_taxid_map
 src/set_lcas
+src/.cproject
+src/.project
+src/.settings/language.settings.xml
