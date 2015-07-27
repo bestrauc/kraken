@@ -31,20 +31,7 @@
 #endif
 
 
-uint64_t GetTimeMs64(){
- struct timeval tv;
 
- gettimeofday(&tv, NULL);
-
- uint64_t ret = tv.tv_usec;
- /* Convert from micro seconds (10^-6) to milliseconds (10^-3) */
- ret /= 1000;
-
- /* Adds the seconds (10^0) after converting them to milliseconds (10^-3) */
- ret += (tv.tv_sec * 1000);
-
- return ret;
-}
 
 using namespace std;
 namespace fs = boost::filesystem;
@@ -225,17 +212,17 @@ namespace kraken {
     buffer->resize(N);
 
     // Variables for timing measurement. (On one line to comment it out easily.)
-    uint64_t t1=0; uint64_t t2=0; uint64_t read_time=0; uint64_t process_time=0;
+    uint64_t t1=0, t2=0, read_time=0, process_time=0;
 
     while(!in_file.eof()){
-        t1 = GetTimeMs64();
+        //t1 = GetTimeMs64();
         
         in_file.read(raw_buffer, sizeof(raw_buffer));   
 
-        read_time += (GetTimeMs64() - t1);
-        t2 = GetTimeMs64();
+        //read_time += (GetTimeMs64() - t1);
+        //t2 = GetTimeMs64();
 
-        #pragma omp parallel for num_threads(32) reduction(+:process_time)
+        #pragma omp parallel for num_threads(4) reduction(+:process_time)
         for (unsigned i=0; i < in_file.gcount(); ++i){
             uint8_t base, qual;
             uint32_t index = pos+i;
@@ -269,13 +256,13 @@ namespace kraken {
             buffer->at(rev_index).seq += baseChar;
             buffer->at(rev_index).quals += qualChar;
 
-            process_time += (GetTimeMs64() - t2);
+            //process_time += (GetTimeMs64() - t2);
         }
         
         pos += in_file.gcount();
     }
 
-    LOG("Tile processing time " << process_time + read_time << "\n");
+    //LOG("Tile processing time " << process_time + read_time << "\n");
     return true;
   }
 
@@ -405,8 +392,8 @@ namespace kraken {
 
     // return empty sequence
     //std::cout << sequenceBuffer->size() << "\n";
-    return DNASequence();
-    //return dna;
+    //return DNASequence();
+    return dna;
   }
 
   bool BCLReader::is_valid() {
