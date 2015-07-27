@@ -33,6 +33,7 @@
 #include <fstream>
 #include <iostream>
 #include <map>
+#include <unordered_map>
 #include <omp.h>
 #include <set>
 #include <sstream>
