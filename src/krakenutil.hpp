@@ -21,6 +21,7 @@
 #define KRAKENUTIL_HPP
 
 #include "kraken_headers.hpp"
+#include "seqreader.hpp"
 
 namespace kraken {
   // Build a map of node to parent from an NCBI taxonomy nodes.dmp file
@@ -34,6 +35,8 @@ namespace kraken {
   // Resolve classification tree
   uint32_t resolve_tree(std::map<uint32_t, uint32_t> &hit_counts,
                         std::map<uint32_t, uint32_t> &parent_map);
+  uint32_t resolve_tree2(std::unordered_map<uint32_t, uint32_t> &hit_counts,
+                          std::map<uint32_t, uint32_t> &parent_map);
 
   class KmerScanner {
     public:
