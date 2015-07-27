@@ -1,5 +1,6 @@
 .svn*
 kraken_db
+minikraken*
 *.o
 src/classify
 src/db_shrink
