@@ -33,8 +33,10 @@ void usage(int exit_code=EX_USAGE);
 void process_file(char *filename);
 void classify_sequence(DNASequence &dna, ostringstream &koss,
 		ostringstream &coss, ostringstream &uoss);
-void incremental_classify_sequence(DNASequence &dna, ostringstream &koss,
-		ostringstream &coss, ostringstream &uoss);
+void incremental_classify_sequence(DNASequence &dna, SeqClassifyInfo &runInfo);
+void classify_finalize(DNASequence &dna, ostringstream &koss,
+		ostringstream &coss, ostringstream &uoss, SeqClassifyInfo &runInfo);
+
 string hitlist_string(vector<uint32_t> &taxa, vector<uint8_t> &ambig);
 set<uint32_t> get_ancestry(uint32_t taxon);
 void report_stats(struct timeval time1, struct timeval time2);
@@ -176,6 +178,7 @@ void process_file(char *filename) {
 	string file_str(filename);
 	DNASequenceReader *reader;
 	DNASequence dna;
+	std::vector<SeqClassifyInfo> runInfoList;
 
 	//if (Fastq_input)
 	if (File_input == FASTQ)
@@ -217,8 +220,12 @@ void process_file(char *filename) {
 			unclassified_output_ss.str("");
 			for (size_t j = 0; j < work_unit.size(); j++){
 				t3 = GetTimeMs64();
-				incremental_classify_sequence( work_unit[j], kraken_output_ss,
-						classified_output_ss, unclassified_output_ss );
+				/*classify_sequence(work_unit[j], kraken_output_ss,
+						classified_output_ss, unclassified_output_ss);*/
+				SeqClassifyInfo runInfo;
+				incremental_classify_sequence(work_unit[j], runInfo);
+				classify_finalize(work_unit[j], kraken_output_ss,
+						classified_output_ss, unclassified_output_ss, runInfo);
 				process_time += (GetTimeMs64() - t3);
 			}
 
@@ -240,132 +247,97 @@ void process_file(char *filename) {
 	delete reader;
 }
 
-void incremental_classify_sequence(DNASequence &dna, ostringstream &koss,
-		ostringstream &coss, ostringstream &uoss) {
-	vector<uint32_t> taxa;
-	vector<uint8_t> ambig_list;
-	map<uint32_t, uint32_t> hit_counts;
-	unordered_map<uint32_t, uint32_t> hit_counts2;
+void incremental_classify_sequence(DNASequence &dna, SeqClassifyInfo &runInfo) {
 	uint64_t *kmer_ptr;
-	uint32_t taxon = 0;
-	uint32_t hits = 0;  // only maintained if in quick mode
-
-	uint64_t current_bin_key;
-	int64_t current_min_pos = 1;
-	int64_t current_max_pos = 0;
-
-	//ostringstream log;
 
 	if (dna.seq.size() >= Database.get_k()) {
 		KmerScanner scanner(dna.seq);
 		while ((kmer_ptr = scanner.next_kmer()) != NULL) {
-			taxon = 0;
+			runInfo.taxon = 0;
 			if (scanner.ambig_kmer()) {
-				ambig_list.push_back(1);
+				runInfo.ambig_list.push_back(1);
 			}
 			else {
-				ambig_list.push_back(0);
+				runInfo.ambig_list.push_back(0);
 				uint32_t *val_ptr = Database.kmer_query(
 						Database.canonical_representation(*kmer_ptr),
-						&current_bin_key,
-						&current_min_pos, &current_max_pos
+						&runInfo.current_bin_key,
+						&runInfo.current_min_pos, &runInfo.current_max_pos
 				);
-				taxon = val_ptr ? *val_ptr : 0;
-				if (taxon) {
-					//hit_counts[taxon]++;
-					hit_counts2[taxon]++;
-					if (Quick_mode && ++hits >= Minimum_hit_count)
+				runInfo.taxon = val_ptr ? *val_ptr : 0;
+				if (runInfo.taxon) {
+					runInfo.hit_counts[runInfo.taxon]++;
+					if (Quick_mode && ++runInfo.hits >= Minimum_hit_count)
 						break;
 				}
 			}
-			taxa.push_back(taxon);
+			runInfo.taxa.push_back(runInfo.taxon);
 		}
 	}
+}
 
-	/*for (auto const& iterator : hit_counts)
-		log << "(" << iterator.first << "," << iterator.second << "), ";
-	log << "\n\n";
+void classify_finalize(DNASequence &dna, ostringstream &koss,
+		ostringstream &coss, ostringstream &uoss, SeqClassifyInfo &runInfo){
 
-	for (auto const& iterator : hit_counts2)
-		log << "(" << iterator.first << "," << iterator.second << "), ";
-	log << "\n\n";*/
-
-	uint32_t call = 0, call2 = 0;
+	uint32_t call = 0;
 	if (Quick_mode)
-		call = hits >= Minimum_hit_count ? taxon : 0;
+		call = runInfo.hits >= Minimum_hit_count ? runInfo.taxon : 0;
 	else{
-		//call = resolve_tree(hit_counts, Parent_map);
-		call = resolve_tree2(hit_counts2, Parent_map);
+		call = resolve_tree2(runInfo.hit_counts, Parent_map);
 	}
-
-	/*if (call != call2){
-		std::cout << "\nCalls different: \n";
-		std::cout << dna.id << " " << call <<	 " " << call2 << "\n";
-		std::cout << std::endl;
-
-		for (auto const& iterator : hit_counts)
-			std::cout << "(" << iterator.first << "," << iterator.second << "), ";
-		std::cout << "\n\n";
-
-		for (auto const& iterator : hit_counts2)
-			std::cout << "(" << iterator.first << "," << iterator.second << "), ";
-		std::cout << "\n\n";
-
-		std::cout << log.str();
-	}*/
 
 	if (call)
-		#pragma omp atomic
-		total_classified++;
+			#pragma omp atomic
+			total_classified++;
 
-	if (Print_unclassified || Print_classified) {
-		ostringstream *oss_ptr = call ? &coss : &uoss;
-		bool print = call ? Print_classified : Print_unclassified;
-		if (print) {
-			if (Fastq_input) {
-				(*oss_ptr) << "@" << dna.header_line << endl
-						<< dna.seq << endl
-						<< "+" << endl
-						<< dna.quals << endl;
-			}
-			else {
-				(*oss_ptr) << ">" << dna.header_line << endl
-						<< dna.seq << endl;
+		if (Print_unclassified || Print_classified) {
+			ostringstream *oss_ptr = call ? &coss : &uoss;
+			bool print = call ? Print_classified : Print_unclassified;
+			if (print) {
+				if (Fastq_input) {
+					(*oss_ptr) << "@" << dna.header_line << endl
+							<< dna.seq << endl
+							<< "+" << endl
+							<< dna.quals << endl;
+				}
+				else {
+					(*oss_ptr) << ">" << dna.header_line << endl
+							<< dna.seq << endl;
+				}
 			}
 		}
-	}
 
-	if (! Print_kraken)
-		return;
-
-	if (call) {
-		koss << "C\t";
-	}
-	else {
-		if (Only_classified_kraken_output)
+		if (! Print_kraken)
 			return;
-		koss << "U\t";
-	}
-	koss << dna.id << "\t" << call << "\t" << dna.seq.size() << "\t";
 
-	if (Quick_mode) {
-		koss << "Q:" << hits;
-	}
-	else {
-		if (taxa.empty())
-			koss << "0:0";
-		else
-			koss << hitlist_string(taxa, ambig_list);
-	}
+		if (call) {
+			koss << "C\t";
+		}
+		else {
+			if (Only_classified_kraken_output)
+				return;
+			koss << "U\t";
+		}
+		koss << dna.id << "\t" << call << "\t" << dna.seq.size() << "\t";
 
-	koss << endl;
+		if (Quick_mode) {
+			koss << "Q:" << runInfo.hits;
+		}
+		else {
+			if (runInfo.taxa.empty())
+				koss << "0:0";
+			else
+				koss << hitlist_string(runInfo.taxa, runInfo.ambig_list);
+		}
+
+		koss << endl;
 }
 
 void classify_sequence(DNASequence &dna, ostringstream &koss,
 		ostringstream &coss, ostringstream &uoss) {
 	vector<uint32_t> taxa;
 	vector<uint8_t> ambig_list;
-	map<uint32_t, uint32_t> hit_counts;
+	std::unordered_map<uint32_t, uint32_t> hit_counts;
 	uint64_t *kmer_ptr;
 	uint32_t taxon = 0;
 	uint32_t hits = 0;  // only maintained if in quick mode
@@ -403,8 +375,7 @@ void classify_sequence(DNASequence &dna, ostringstream &koss,
 	if (Quick_mode)
 		call = hits >= Minimum_hit_count ? taxon : 0;
 	else
-		call = 0;
-		//call = resolve_tree(hit_counts, Parent_map);
+		call = resolve_tree2(hit_counts, Parent_map);
 
 	if (call)
 		#pragma omp atomic
@@ -541,10 +512,10 @@ void parse_command_line(int argc, char **argv) {
 			Fastq_input = true;
 			File_input = FASTQ;
 			break;
-			// ADDED
-		case 'b' :
-			File_input = BCL;
-			break;
+			// ADDED			//
+		case 'b' :				//
+			File_input = BCL;	//
+			break;				//
 		case 'c' :
 			Only_classified_kraken_output = true;
 			break;
@@ -568,10 +539,10 @@ void parse_command_line(int argc, char **argv) {
 		case 'M' :
 			Populate_memory = true;
 			break;
-			// ADDED
-		case 'l' :
-			length = atoi(optarg);
-			break;
+			// ADDED				//
+		case 'l' :					//
+			length = atoi(optarg);	//
+			break;					//
 		default:
 			usage();
 			break;
@@ -609,7 +580,9 @@ void usage(int exit_code) {
 			<< "  -m #             Minimum hit count (ignored w/o -q)" << endl
 			<< "  -C filename      Print classified sequences" << endl
 			<< "  -U filename      Print unclassified sequences" << endl
+			<< "  -l length        Length of reads (only relevant for BCL)" << endl
 			<< "  -f               Input is in FASTQ format" << endl
+			<< "  -b               Input is in BCL format" << endl
 			<< "  -c               Only include classified reads in output" << endl
 			<< "  -M               Preload database files" << endl
 			<< "  -h               Print this message" << endl

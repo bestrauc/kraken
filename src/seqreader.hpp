@@ -38,6 +38,19 @@ namespace kraken {
     std::string quals;
   } DNASequence;
 
+  typedef struct{
+	std::vector<uint32_t> taxa;
+	std::vector<uint8_t> ambig_list;
+	std::unordered_map<uint32_t, uint32_t> hit_counts;
+
+	uint64_t current_bin_key;
+	int64_t current_min_pos = 1;
+	int64_t current_max_pos = 0;
+
+	uint32_t hits = 0;  // only maintained if in quick mode
+	uint32_t taxon = 0;
+  } SeqClassifyInfo;
+
   class DNASequenceReader {
     public:
     virtual DNASequence next_sequence() = 0; 
@@ -74,13 +87,15 @@ namespace kraken {
 
     BCLReader(std::string filename);
     BCLReader(std::string filename, int length);
+    BCLReader(std::string filename, int length, std::vector<SeqClassifyInfo> *runInfoList);
     DNASequence next_sequence();
     bool is_valid();
 
     private:
+    std::vector<SeqClassifyInfo> *runInfoList;
     Queue<std::unique_ptr<TDNABuffer> > concurrentBufferQueue;
     std::unique_ptr<TDNABuffer> sequenceBuffer;
-    std::vector<path> cyclePaths;
+    std::vector<std::vector<fs::path> > cyclePaths;
     boost::filesystem::directory_iterator lane_dir_iter;
     path basecalls_path;
 

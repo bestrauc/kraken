@@ -319,13 +319,40 @@ namespace kraken {
 
     if (fs::is_regular_file(basecalls_path)){
         valid = false;
-        err(EX_NOINPUT, "File given. 'Basecalls' directory expected.");
+        err(EX_NOINPUT, "File given. 'BaseCalls' directory expected.");
     }
+
+    // Scan target directory and get all cycle paths for each of the lane folders.
+    vector<fs::path> lanePaths;
+    copy_if(fs::directory_iterator(basecalls_path), fs::directory_iterator(), back_inserter(lanePaths),
+    		[&](const fs::path& p){
+    		    			return (p.filename().string()[0] == 'L');
+			}
+    );
+
+    sort(lanePaths.begin(), lanePaths.end());
+
+    vector<vector<fs::path> > cyclePaths;
+
+    for (fs::path &path : lanePaths){
+    	cyclePaths.push_back(vector<fs::path>());
+        copy_if(fs::directory_iterator(path), fs::directory_iterator(), back_inserter(cyclePaths.back()),
+        		[&](const fs::path& p){
+        		    			return (fs::is_directory(p) && p.filename().string()[0] == 'C');
+    			}
+        );
+
+        sort(cyclePaths.back().begin(), cyclePaths.back().end(), cyclePathCompare);
+        //copy(cyclePaths.back().begin(), cyclePaths.back().end(), ostream_iterator<fs::path>(cout, "\n"));
+    }
+
+    std::cout << "Found " << lanePaths.size() << " lane directories.\n";
+    copy(lanePaths.begin(), lanePaths.end(), ostream_iterator<fs::path>(cout, "\n"));
  
-    std::string lane_dir = basecalls_path.string();
+    /*std::string lane_dir = basecalls_path.string();
     lane_dir.append("/L00");
     lane_dir.append(std::to_string(lane_num));
-    lane_dir_iter = fs::directory_iterator(lane_dir); 
+    lane_dir_iter = fs::directory_iterator(lane_dir); */
 
     // We have two values for false. "_valid" is used internally and
     // is false if no new buffer can be filled. "valid" is used for the
@@ -334,7 +361,7 @@ namespace kraken {
     valid = true;
     _valid = true;
 
-    getCyclePaths();  
+    //getCyclePaths();
   }
 
 
@@ -347,6 +374,11 @@ namespace kraken {
     : tile_num(1101), lane_num(1), read_length(length) {    
     this->init(filename);
   }
+
+  BCLReader::BCLReader(string filename, int length, std::vector<SeqClassifyInfo> *runInfoList)
+      : runInfoList(runInfoList), tile_num(1101), lane_num(1), read_length(length) {
+      this->init(filename);
+    }
 
   DNASequence BCLReader::next_sequence() {
     DNASequence dna;
@@ -366,7 +398,7 @@ namespace kraken {
     // is not ready yet, the function blocks there and waits for it.
     if (sequenceBuffer == nullptr || sequenceBuffer->empty()){
         LOG("\nWaiting for buffer to be filled...\n");
-        sequenceBuffer = std::move(concurrentBufferQueue.pop());
+        sequenceBuffer = std::move(concurrentBufferQueue.pop()); // this is blocking
 
         LOG(std::cout << "Found buffer. Size: " << sequenceBuffer->size() << "\n");
 
@@ -482,7 +514,7 @@ namespace kraken {
     LOG("Ended addSequenceBuffer" << tile_num << "\n");
   }
 
-
+/*
   void BCLReader::getCyclePaths(){
       cyclePaths.clear();
       // Recurse into lane directory. Iterate over cycles. 
@@ -500,6 +532,6 @@ namespace kraken {
       // TODO: Some file not found
       if (cyclePaths.size() > (unsigned)read_length && read_length > 0)
         cyclePaths.resize(read_length);
-  }  
+  } */
 
 } // namespace
