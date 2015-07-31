@@ -89,6 +89,7 @@ private:
 class BCLReader : public DNASequenceReader {
 public:
 	typedef std::vector<DNASequence> TDNABuffer;
+	typedef std::unordered_map<int, path> TTilePathMap;
 
 	BCLReader(std::string filename);
 	BCLReader(std::string filename, int length);
@@ -97,30 +98,34 @@ public:
 	bool is_valid();
 
 private:
+	// The path data structures for the lane, cycles and temporary files.
+	path basecalls_path;
 	std::vector<path> lanePaths;
 	std::vector<std::vector<path> > cyclePaths;
+	std::unordered_map<int, TTilePathMap> tmpPaths;
 
-	// a map of (tile number, bit) to show if to process a read
+	// data structures indicating
 	std::unordered_map<int, std::vector<bool> > readsFinished;
-	// a vector of flags to indicate if to process a tile file
 	std::vector<bool> tileFinished;
 
 	// A list of progress for the reads of one tile
 	//std::vector<std::unique_ptr<SeqClassifyInfo> > runInfoList;
 	std::vector<SeqClassifyInfo*> runInfoList;
+	std::unique_ptr<TDNABuffer> sequenceBuffer;
 
 	Queue<std::unique_ptr<TDNABuffer> > concurrentBufferQueue;
-	std::unique_ptr<TDNABuffer> sequenceBuffer;
-	path basecalls_path;
+	Queue<std::unique_ptr<TDNABuffer> > concurrentWriteQueue;
 
+	// Information about the state of the reader
 	int tile_num;
 	int lane_num;
-	bool valid, _valid;
 	int read_length;
+	bool valid,_valid;
 
+	// Private function definitions
 	bool fillSequenceBuffer();
 	void addSequenceBuffer(int lane_num, int tile_num);
-	void getCyclePaths();
+	void getFilePaths();
 	void init(std::string filename);
 };
 }

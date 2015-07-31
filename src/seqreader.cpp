@@ -322,8 +322,8 @@ void BCLReader::init(string filename){
 		err(EX_NOINPUT, "File given. 'BaseCalls' directory expected.");
 	}
 
-	// Scan target directory and get all cycle paths for each of the lane folders.
-	getCyclePaths();
+	// Scan target directory and get all paths for each of the lane folders.
+	getFilePaths();
 
 	// We have two values for false. "_valid" is used internally and
 	// is false if no new buffer can be filled. "valid" is used for the
@@ -474,7 +474,7 @@ void BCLReader::addSequenceBuffer(int lane_num, int tile_num){
 	LOG("Ended addSequenceBuffer" << tile_num << "\n");
 }
 
-void BCLReader::getCyclePaths(){
+void BCLReader::getFilePaths(){
 	copy_if(fs::directory_iterator(basecalls_path), fs::directory_iterator(), back_inserter(lanePaths),
 			[&](const fs::path& p){
 		return (p.filename().string()[0] == 'L');
@@ -497,6 +497,17 @@ void BCLReader::getCyclePaths(){
 
 	std::cout << "Found " << lanePaths.size() << " lane directories.\n";
 	copy(lanePaths.begin(), lanePaths.end(), ostream_iterator<fs::path>(cout, "\n"));
+
+	std::cout << "Setting up paths for temporary directories.\n";
+	for (size_t i=0; i < lanePaths.size(); ++i){
+		tmpPaths.insert(std::make_pair<int, TTilePathMap>(i+1, TTilePathMap()));
+
+		size_t j=1101;
+		do{
+			std::string s(lanePaths[i].string() + std::to_string(j) + ".filter");
+			tmpPaths[i+1][j] = fs::path(s);
+		} while(j = getNextTile(j));
+	}
 }
 
 } // namespace
