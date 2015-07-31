@@ -178,7 +178,6 @@ void process_file(char *filename) {
 	string file_str(filename);
 	DNASequenceReader *reader;
 	DNASequence dna;
-	std::vector<SeqClassifyInfo> runInfoList;
 
 	//if (Fastq_input)
 	if (File_input == FASTQ)
