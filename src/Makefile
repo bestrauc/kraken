@@ -1,6 +1,6 @@
 CXX = g++
 #CXX = clang++
-CXXFLAGS = -Wall -fopenmp -std=c++0x
+CXXFLAGS = -Wall -fopenmp -std=c++11
 PROGS = db_sort set_lcas classify make_seqid_to_taxid_map db_shrink
 
 .PHONY: all install clean
