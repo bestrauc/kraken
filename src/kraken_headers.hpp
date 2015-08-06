@@ -47,5 +47,6 @@
 #include <sysexits.h>
 #include <unistd.h>
 #include <vector>
+#include <algorithm>
 
 #endif

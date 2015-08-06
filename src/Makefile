@@ -5,7 +5,7 @@ PROGS = db_sort set_lcas classify make_seqid_to_taxid_map db_shrink
 
 .PHONY: all install clean
 
-all: CXX += -DDEBUG -O3
+all: CXX += -O3
 all: $(PROGS)
 
 debug: CXX += -DDEBUG -g

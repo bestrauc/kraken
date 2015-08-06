@@ -30,8 +30,20 @@
 #   define LOG(x) do {} while (0)
 #endif
 
+uint64_t GetTimeMs64(){
+	struct timeval tv;
 
+	gettimeofday(&tv, NULL);
 
+	uint64_t ret = tv.tv_usec;
+	/* Convert from micro seconds (10^-6) to milliseconds (10^-3) */
+	ret /= 1000;
+
+	/* Adds the seconds (10^0) after converting them to milliseconds (10^-3) */
+	ret += (tv.tv_sec * 1000);
+
+	return ret;
+}
 
 using namespace std;
 namespace fs = boost::filesystem;
@@ -187,7 +199,7 @@ bool scanFilter(const fs::path &filter_path, std::vector<bool> &tile_index){
 
 // Scan the tile given in the tile_path and save sequences into the buffer
 bool scanTile(int tile_num, const fs::path &tile_path, std::vector<bool> &tile_filter,
-		std::unique_ptr<BCLReader::TDNABuffer> &buffer){
+		std::unique_ptr<BCLReader::TRunInfoList> &runInfo, std::unique_ptr<BCLReader::TDNABuffer> &buffer){
 
 	std::ifstream in_file;
 	in_file.open(tile_path.c_str(), std::ios::in | std::ios::binary);
@@ -196,7 +208,6 @@ bool scanTile(int tile_num, const fs::path &tile_path, std::vector<bool> &tile_f
 		std::cout << "Unable to open file: " << tile_path << "\n";
 		return false;
 	}
-
 
 	// Process file
 	uint32_t N; // number of clusters (sequences)
@@ -211,16 +222,22 @@ bool scanTile(int tile_num, const fs::path &tile_path, std::vector<bool> &tile_f
 
 	buffer->resize(N);
 
+	// If runInfo is not yet initialized, resize it and insert .
+	if (runInfo->size() != N){
+		runInfo->resize(N);
+		std::generate_n(std::back_inserter(*runInfo), N, std::make_shared<SeqClassifyInfo>);
+	}
+
 	// Variables for timing measurement. (On one line to comment it out easily.)
 	uint64_t t1=0, t2=0, read_time=0, process_time=0;
 
 	while(!in_file.eof()){
-		//t1 = GetTimeMs64();
+		t1 = GetTimeMs64();
 
 		in_file.read(raw_buffer, sizeof(raw_buffer));
 
-		//read_time += (GetTimeMs64() - t1);
-		//t2 = GetTimeMs64();
+		read_time += (GetTimeMs64() - t1);
+		t2 = GetTimeMs64();
 
 		#pragma omp parallel for num_threads(4) reduction(+:process_time)
 		for (unsigned i=0; i < in_file.gcount(); ++i){
@@ -245,24 +262,33 @@ bool scanTile(int tile_num, const fs::path &tile_path, std::vector<bool> &tile_f
 			char baseChar = numToDNA(base);  // convert 0->A,..,3->T
 			char qualChar = (char)(qual+33); // PHRED score to ASCII
 
-			// If tile scanned first time, set id and .
+			// If tile scanned first time, set id and runInfo.
 			if (buffer->at(rev_index).id.size()==0){
 				std::stringstream tmp;
 				tmp << tile_num << "_" << (pos+i);
 				buffer->at(rev_index).id = tmp.str();
+				buffer->at(rev_index).readInfo 	= runInfo->at(rev_index);
+				//runInfo->at(rev_index) = buffer->at(rev_index).readInfo;
+
+				// Create new classification info if empty, read old one otherwise
+				/*if (runInfo->empty())
+					buffer->at(rev_index).readInfo 	= std::unique_ptr<SeqClassifyInfo>(new SeqClassifyInfo());
+				else
+					;// read old info here*/
 			}
 
 			// Save the qualities into the read buffer.
 			buffer->at(rev_index).seq += baseChar;
 			buffer->at(rev_index).quals += qualChar;
 
-			//process_time += (GetTimeMs64() - t2);
+			process_time += (GetTimeMs64() - t2);
 		}
 
 		pos += in_file.gcount();
 	}
 
 	//LOG("Tile processing time " << process_time + read_time << "\n");
+	//std::cout << "Tile processing time " << process_time << ". Read time " << read_time << "\n";
 	return true;
 }
 
@@ -378,10 +404,12 @@ DNASequence BCLReader::next_sequence() {
 		}
 	}
 
+	//std::cout << sequenceBuffer->size() << "\n";
+
 	// If the sequence is empty, it did not pass
 	// the quality filter and will be skipped.
 	do{
-		dna = sequenceBuffer->back();
+		dna = std::move(sequenceBuffer->back());
 		sequenceBuffer->pop_back();
 	} while (!sequenceBuffer->empty() && dna.seq.empty());
 
@@ -446,14 +474,25 @@ void BCLReader::addSequenceBuffer(int lane_num, int tile_num){
 	LOG("Entered addSequenceBuffer " << tile_num << "\n");
 	// Create new buffer to hold the reads.
 	std::unique_ptr<TDNABuffer> buffer(new TDNABuffer());
+	// Create new buffer for the classification state.
+	std::unique_ptr<TRunInfoList> runInfo(new TRunInfoList());
+	//std::unique_ptr<TRunInfoList> runInfo;
 
 	// create tile string for path construction
 	std::string tile_str("/s_" + std::to_string(lane_num) + "_" + std::to_string(tile_num));
 
 	LOG(tile_str << "\n");
+	std::cout << tile_str << "\n";
 
 	// Make index of .filter file for current tile.
 	std::string s(lanePaths[lane_num-1].string() + tile_str + ".filter");
+
+
+	// If temporary progress file exists, read it
+	// otherwise the SeqClassifyInfo is initialized empty later
+	if (fs::exists(tmpPaths[lane_num][tile_num])){
+		// put reading here
+	}
 
 	std::vector<bool> tile_filter;
 	scanFilter(fs::path(s), tile_filter);
@@ -463,7 +502,7 @@ void BCLReader::addSequenceBuffer(int lane_num, int tile_num){
 		std::string s(cyclePaths[lane_num-1][i].string() + tile_str + ".bcl");
 
 		// Add bases of tile in the current cycle to the buffered reads.
-		if (scanTile(tile_num, fs::path(s), tile_filter, buffer) == false){
+		if (scanTile(tile_num, fs::path(s), tile_filter, runInfo, buffer) == false){
 			_valid = false;
 		}
 	}
@@ -471,6 +510,7 @@ void BCLReader::addSequenceBuffer(int lane_num, int tile_num){
 	// Add the read buffer to the Queue which holds the precomputed buffers.
 	// (It is a concurrent queue, so multiple threads can access it.)
 	concurrentBufferQueue.push(std::move(buffer));
+	concurrentRunInfoQueue.push(std::move(runInfo));
 	LOG("Ended addSequenceBuffer" << tile_num << "\n");
 }
 
@@ -504,9 +544,10 @@ void BCLReader::getFilePaths(){
 
 		size_t j=1101;
 		do{
-			std::string s(lanePaths[i].string() + std::to_string(j) + ".filter");
+			std::string s(lanePaths[i].string() + "/" + std::to_string(j) + ".filter");
 			tmpPaths[i+1][j] = fs::path(s);
-		} while(j = getNextTile(j));
+			std::cout << tmpPaths[i+1][j].string() << "\n";
+		} while( (j = getNextTile(j)) );
 	}
 }
 

@@ -33,9 +33,9 @@ void usage(int exit_code=EX_USAGE);
 void process_file(char *filename);
 void classify_sequence(DNASequence &dna, ostringstream &koss,
 		ostringstream &coss, ostringstream &uoss);
-void incremental_classify_sequence(DNASequence &dna, SeqClassifyInfo &runInfo);
+void incremental_classify_sequence(DNASequence &dna);
 void classify_finalize(DNASequence &dna, ostringstream &koss,
-		ostringstream &coss, ostringstream &uoss, SeqClassifyInfo &runInfo);
+		ostringstream &coss, ostringstream &uoss);
 
 string hitlist_string(vector<uint32_t> &taxa, vector<uint8_t> &ambig);
 set<uint32_t> get_ancestry(uint32_t taxon);
@@ -72,20 +72,20 @@ uint64_t total_sequences = 0;
 uint64_t total_bases = 0;
 
 
-uint64_t GetTimeMs64(){
-	struct timeval tv;
-
-	gettimeofday(&tv, NULL);
-
-	uint64_t ret = tv.tv_usec;
-	/* Convert from micro seconds (10^-6) to milliseconds (10^-3) */
-	ret /= 1000;
-
-	/* Adds the seconds (10^0) after converting them to milliseconds (10^-3) */
-	ret += (tv.tv_sec * 1000);
-
-	return ret;
-}
+//uint64_t GetTimeMs64(){
+//	struct timeval tv;
+//
+//	gettimeofday(&tv, NULL);
+//
+//	uint64_t ret = tv.tv_usec;
+//	/* Convert from micro seconds (10^-6) to milliseconds (10^-3) */
+//	ret /= 1000;
+//
+//	/* Adds the seconds (10^0) after converting them to milliseconds (10^-3) */
+//	ret += (tv.tv_sec * 1000);
+//
+//	return ret;
+//}
 
 int main(int argc, char **argv) {
 #ifdef _OPENMP
@@ -202,13 +202,11 @@ void process_file(char *filename) {
 			#pragma omp critical(get_input)
 			{
 				while (total_nt < Work_unit_size) {
-					t1 = GetTimeMs64();
 					dna = reader->next_sequence();
 					if (! reader->is_valid())
 						break;
 					work_unit.push_back(dna);
 					total_nt += dna.seq.size();
-					read_time += (GetTimeMs64() - t1);
 				}
 			}
 			if (total_nt == 0)
@@ -218,14 +216,17 @@ void process_file(char *filename) {
 			classified_output_ss.str("");
 			unclassified_output_ss.str("");
 			for (size_t j = 0; j < work_unit.size(); j++){
-				t3 = GetTimeMs64();
 				/*classify_sequence(work_unit[j], kraken_output_ss,
 						classified_output_ss, unclassified_output_ss);*/
-				SeqClassifyInfo runInfo;
-				incremental_classify_sequence(work_unit[j], runInfo);
+				//std::cout << "Classify\n";
+				//std::cout << work_unit[j].readInfo << "\n";
+				//work_unit[j].readInfo = std::make_shared<SeqClassifyInfo>();
+				//work_unit[j].readInfo.reset(new SeqClassifyInfo());
+				//std::cout << work_unit[j].readInfo << "\n\n";
+				incremental_classify_sequence(work_unit[j]);
+				//std::cout << "Finalize\n";
 				classify_finalize(work_unit[j], kraken_output_ss,
-						classified_output_ss, unclassified_output_ss, runInfo);
-				process_time += (GetTimeMs64() - t3);
+						classified_output_ss, unclassified_output_ss);
 			}
 
 			#pragma omp critical(write_output)
@@ -246,43 +247,50 @@ void process_file(char *filename) {
 	delete reader;
 }
 
-void incremental_classify_sequence(DNASequence &dna, SeqClassifyInfo &runInfo) {
+void incremental_classify_sequence(DNASequence &dna) {
 	uint64_t *kmer_ptr;
+
+	uint64_t current_bin_key;
+	int64_t current_min_pos = 1;
+	int64_t current_max_pos = 0;
 
 	if (dna.seq.size() >= Database.get_k()) {
 		KmerScanner scanner(dna.seq);
 		while ((kmer_ptr = scanner.next_kmer()) != NULL) {
-			runInfo.taxon = 0;
+			dna.readInfo->taxon = 0;
 			if (scanner.ambig_kmer()) {
-				runInfo.ambig_list.push_back(1);
+				dna.readInfo->ambig_list.push_back(1);
 			}
 			else {
-				runInfo.ambig_list.push_back(0);
+				dna.readInfo->ambig_list.push_back(0);
 				uint32_t *val_ptr = Database.kmer_query(
 						Database.canonical_representation(*kmer_ptr),
-						&runInfo.current_bin_key,
-						&runInfo.current_min_pos, &runInfo.current_max_pos
+						//&dna.readInfo->current_bin_key,
+						//&dna.readInfo->current_min_pos, &dna.readInfo->current_max_pos
+						&current_bin_key,
+						&current_min_pos, &current_max_pos
 				);
-				runInfo.taxon = val_ptr ? *val_ptr : 0;
-				if (runInfo.taxon) {
-					runInfo.hit_counts[runInfo.taxon]++;
-					if (Quick_mode && ++runInfo.hits >= Minimum_hit_count)
+				dna.readInfo->taxon = val_ptr ? *val_ptr : 0;
+				if (dna.readInfo->taxon) {
+					dna.readInfo->hit_counts[dna.readInfo->taxon]++;
+					if (Quick_mode && ++dna.readInfo->hits >= Minimum_hit_count)
 						break;
 				}
 			}
-			runInfo.taxa.push_back(runInfo.taxon);
+
+			dna.readInfo->taxa.push_back(dna.readInfo->taxon);
 		}
 	}
 }
 
 void classify_finalize(DNASequence &dna, ostringstream &koss,
-		ostringstream &coss, ostringstream &uoss, SeqClassifyInfo &runInfo){
+		ostringstream &coss, ostringstream &uoss){
 
 	uint32_t call = 0;
 	if (Quick_mode)
-		call = runInfo.hits >= Minimum_hit_count ? runInfo.taxon : 0;
+		call = dna.readInfo->hits >= Minimum_hit_count ? dna.readInfo->taxon : 0;
 	else{
-		call = resolve_tree2(runInfo.hit_counts, Parent_map);
+		call = resolve_tree2(dna.readInfo->hit_counts, Parent_map);
 	}
 
 	if (call)
@@ -320,13 +328,13 @@ void classify_finalize(DNASequence &dna, ostringstream &koss,
 		koss << dna.id << "\t" << call << "\t" << dna.seq.size() << "\t";
 
 		if (Quick_mode) {
-			koss << "Q:" << runInfo.hits;
+			koss << "Q:" << dna.readInfo->hits;
 		}
 		else {
-			if (runInfo.taxa.empty())
+			if (dna.readInfo->taxa.empty())
 				koss << "0:0";
 			else
-				koss << hitlist_string(runInfo.taxa, runInfo.ambig_list);
+				koss << hitlist_string(dna.readInfo->taxa, dna.readInfo->ambig_list);
 		}
 
 		koss << endl;

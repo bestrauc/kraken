@@ -37,23 +37,30 @@ typedef struct{
 	std::vector<uint8_t> ambig_list;
 	std::unordered_map<uint32_t, uint32_t> hit_counts;
 
-	uint64_t current_bin_key;
+	/*uint64_t current_bin_key;
 	int64_t current_min_pos = 1;
-	int64_t current_max_pos = 0;
+	int64_t current_max_pos = 0;*/
 
 	uint32_t hits = 0;  // only maintained if in quick mode
 	uint32_t taxon = 0;
 } SeqClassifyInfo;
 
-typedef struct {
+struct DNASequence{
 	std::string id;
 	std::string header_line;  // id + optional description
 	std::string seq;
 	std::string quals;
 
 	// only used for BCL reader, otherwise null
-	SeqClassifyInfo* readInfo;
-} DNASequence;
+	std::shared_ptr<SeqClassifyInfo> readInfo;
+
+	/*DNASequence() = default;
+	DNASequence(DNASequence&&) = default;
+	DNASequence& operator=(DNASequence&&) = default;
+	DNASequence(const DNASequence&) = delete;
+	DNASequence& operator=(const DNASequence&) = delete;
+    ~DNASequence() = default;*/
+};
 
 
 class DNASequenceReader {
@@ -90,6 +97,7 @@ class BCLReader : public DNASequenceReader {
 public:
 	typedef std::vector<DNASequence> TDNABuffer;
 	typedef std::unordered_map<int, path> TTilePathMap;
+	typedef std::vector<std::shared_ptr<SeqClassifyInfo> > TRunInfoList;
 
 	BCLReader(std::string filename);
 	BCLReader(std::string filename, int length);
@@ -110,11 +118,10 @@ private:
 
 	// A list of progress for the reads of one tile
 	//std::vector<std::unique_ptr<SeqClassifyInfo> > runInfoList;
-	std::vector<SeqClassifyInfo*> runInfoList;
 	std::unique_ptr<TDNABuffer> sequenceBuffer;
 
 	Queue<std::unique_ptr<TDNABuffer> > concurrentBufferQueue;
-	Queue<std::unique_ptr<TDNABuffer> > concurrentWriteQueue;
+	Queue<std::unique_ptr<TRunInfoList> > concurrentRunInfoQueue;
 
 	// Information about the state of the reader
 	int tile_num;
