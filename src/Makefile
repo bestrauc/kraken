@@ -1,6 +1,7 @@
 CXX = g++
 #CXX = clang++
-CXXFLAGS = -Wall -fopenmp -std=c++11
+#LDFLAGS=-L/home/RKID1/strauchb/library/lib
+override CXXFLAGS += -Wall -fopenmp -std=c++11
 PROGS = db_sort set_lcas classify make_seqid_to_taxid_map db_shrink
 
 .PHONY: all install clean
