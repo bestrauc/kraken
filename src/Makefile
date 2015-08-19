@@ -22,10 +22,10 @@ db_shrink: krakendb.o quickfile.o
 db_sort: krakendb.o quickfile.o
 
 set_lcas: krakendb.o quickfile.o krakenutil.o seqreader.o
-	$(CXX) $(CXXFLAGS) $(LDFLAGS) set_lcas.cpp krakendb.o quickfile.o krakenutil.o seqreader.o -o set_lcas $(LOADLIBES) $(LDLIBS) -lboost_system -lboost_filesystem
+	$(CXX) $(CXXFLAGS) $(LDFLAGS) set_lcas.cpp krakendb.o quickfile.o krakenutil.o seqreader.o -o set_lcas $(LOADLIBES) $(LDLIBS) -lboost_serialization -lboost_system -lboost_filesystem
 
 classify: classify.cpp krakendb.o quickfile.o krakenutil.o seqreader.o
-	$(CXX) $(CXXFLAGS) $(LDFLAGS) classify.cpp krakendb.o quickfile.o krakenutil.o seqreader.o -o classify $(LOADLIBES) $(LDLIBS) -lboost_system -lboost_filesystem
+	$(CXX) $(CXXFLAGS) $(LDFLAGS) classify.cpp krakendb.o quickfile.o krakenutil.o seqreader.o -o classify $(LOADLIBES) $(LDLIBS) -lboost_serialization -lboost_system -lboost_filesystem
 
 make_seqid_to_taxid_map: quickfile.o
 
