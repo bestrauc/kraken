@@ -199,7 +199,7 @@ bool scanFilter(const fs::path &filter_path, std::vector<bool> &tile_index){
 
 // Scan the tile given in the tile_path and save sequences into the buffer
 bool scanTile(int tile_num, const fs::path &tile_path, std::vector<bool> &tile_filter,
-		std::unique_ptr<BCLReader::TRunInfoList> &runInfo, std::unique_ptr<BCLReader::TDNABuffer> &buffer){
+		std::unique_ptr<RunInfoContainer> &runInfo, std::unique_ptr<BCLReader::TDNABuffer> &buffer){
 
 	std::ifstream in_file;
 	in_file.open(tile_path.c_str(), std::ios::in | std::ios::binary);
@@ -223,9 +223,9 @@ bool scanTile(int tile_num, const fs::path &tile_path, std::vector<bool> &tile_f
 	buffer->resize(N);
 
 	// If runInfo is not yet initialized, resize it and insert .
-	if (runInfo->size() != N){
-		runInfo->resize(N);
-		std::generate_n(std::back_inserter(*runInfo), N, std::make_shared<SeqClassifyInfo>);
+	if (runInfo->runInfoList.size() != N){
+		runInfo->runInfoList.resize(N);
+//		std::generate_n(std::back_inserter(*runInfo), N, std::make_shared<SeqClassifyInfo>);
 	}
 
 	// Variables for timing measurement. (On one line to comment it out easily.)
@@ -267,7 +267,8 @@ bool scanTile(int tile_num, const fs::path &tile_path, std::vector<bool> &tile_f
 				std::stringstream tmp;
 				tmp << tile_num << "_" << (pos+i);
 				buffer->at(rev_index).id = tmp.str();
-				buffer->at(rev_index).readInfo 	= runInfo->at(rev_index);
+				runInfo->runInfoList.at(rev_index) = std::make_shared<SeqClassifyInfo>();
+				buffer->at(rev_index).readInfo 	= runInfo->runInfoList.at(rev_index);
 				//runInfo->at(rev_index) = buffer->at(rev_index).readInfo;
 
 				// Create new classification info if empty, read old one otherwise
@@ -392,6 +393,10 @@ DNASequence BCLReader::next_sequence() {
 	// should have been filled by a concurrent thread. If the next buffer
 	// is not ready yet, the function blocks there and waits for it.
 	if (sequenceBuffer == nullptr || sequenceBuffer->empty()){
+		// When sequenceBuffer is empty, spawn a writer thread for temp information
+		if (sequenceBuffer != nullptr && sequenceBuffer->empty())
+			writeRunInfo(std::move(concurrentRunInfoQueue.pop()));
+
 		LOG("\nWaiting for buffer to be filled...\n");
 		sequenceBuffer = std::move(concurrentBufferQueue.pop()); // this is blocking
 
@@ -475,7 +480,7 @@ void BCLReader::addSequenceBuffer(int lane_num, int tile_num){
 	// Create new buffer to hold the reads.
 	std::unique_ptr<TDNABuffer> buffer(new TDNABuffer());
 	// Create new buffer for the classification state.
-	std::unique_ptr<TRunInfoList> runInfo(new TRunInfoList());
+	std::unique_ptr<RunInfoContainer> runInfo(new RunInfoContainer(0, lane_num, tile_num));
 	//std::unique_ptr<TRunInfoList> runInfo;
 
 	// create tile string for path construction
@@ -514,6 +519,28 @@ void BCLReader::addSequenceBuffer(int lane_num, int tile_num){
 	LOG("Ended addSequenceBuffer" << tile_num << "\n");
 }
 
+void BCLReader::writeRunInfo(std::unique_ptr<RunInfoContainer> runInfoList){
+	std::ofstream ofs(tmpPaths[runInfoList->lane_num][runInfoList->tile_num].string());
+
+	// wait for the runInfoList
+	std::cout << "Waiting for the release of the write lock...\n";
+	runInfoList->write_lock.lock();
+
+    {
+        boost::archive::binary_oarchive oa(ofs);
+		//for (std::shared_ptr<SeqClassifyInfo> seqInfo : (*runInfoList))
+		//	oa << *seqInfo; // write class instance to archive
+
+    	// archive and stream closed when destructors are called
+    }
+
+    runInfoList->write_lock.unlock();
+
+	return;
+}
+
+// Utility functions
+
 void BCLReader::getFilePaths(){
 	copy_if(fs::directory_iterator(basecalls_path), fs::directory_iterator(), back_inserter(lanePaths),
 			[&](const fs::path& p){
@@ -527,8 +554,8 @@ void BCLReader::getFilePaths(){
 		cyclePaths.push_back(vector<fs::path>());
 		copy_if(fs::directory_iterator(path), fs::directory_iterator(), back_inserter(cyclePaths.back()),
 				[&](const fs::path& p){
-			return (fs::is_directory(p) && p.filename().string()[0] == 'C');
-		}
+					return (fs::is_directory(p) && p.filename().string()[0] == 'C');
+				}
 		);
 
 		sort(cyclePaths.back().begin(), cyclePaths.back().end(), cyclePathCompare);

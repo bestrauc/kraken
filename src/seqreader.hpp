@@ -23,10 +23,17 @@
 #include "kraken_headers.hpp"
 #include "Queue.h"
 #include <boost/filesystem.hpp>
+#include <boost/serialization/base_object.hpp>
+#include <boost/archive/binary_oarchive.hpp>
+#include <boost/archive/binary_iarchive.hpp>
 #include <iostream>
 #include <memory>
-#include <thread>
 #include <algorithm>
+
+// Concurrency related headers
+#include <thread>
+#include <atomic>
+#include <mutex>
 
 using namespace boost::filesystem;
 
@@ -43,7 +50,41 @@ typedef struct{
 
 	uint32_t hits = 0;  // only maintained if in quick mode
 	uint32_t taxon = 0;
+
+	template<class Archive>
+	void serialize(Archive &ar, const unsigned int version){
+	    ar & taxa;
+	    ar & ambig_list;
+	    ar & hit_counts;
+	    ar & hits;
+	    ar & taxon;
+	}
 } SeqClassifyInfo;
+
+typedef std::vector<std::shared_ptr<SeqClassifyInfo> > TRunInfoList;
+
+struct RunInfoContainer{
+	TRunInfoList runInfoList;
+
+	RunInfoContainer(int count, int lane, int tile) : count(count), lane_num(lane), tile_num(tile) {
+		write_lock.lock();
+	};
+
+	std::atomic_uint count;
+	std::mutex write_lock;
+
+	int lane_num;
+	int tile_num;
+
+	void increment_count(){
+		++count;
+
+		// Release run information for reading when all information has been updated.
+		if (count == runInfoList.size())
+			write_lock.unlock();
+	}
+
+};
 
 struct DNASequence{
 	std::string id;
@@ -97,7 +138,6 @@ class BCLReader : public DNASequenceReader {
 public:
 	typedef std::vector<DNASequence> TDNABuffer;
 	typedef std::unordered_map<int, path> TTilePathMap;
-	typedef std::vector<std::shared_ptr<SeqClassifyInfo> > TRunInfoList;
 
 	BCLReader(std::string filename);
 	BCLReader(std::string filename, int length);
@@ -121,7 +161,7 @@ private:
 	std::unique_ptr<TDNABuffer> sequenceBuffer;
 
 	Queue<std::unique_ptr<TDNABuffer> > concurrentBufferQueue;
-	Queue<std::unique_ptr<TRunInfoList> > concurrentRunInfoQueue;
+	Queue<std::unique_ptr<RunInfoContainer> > concurrentRunInfoQueue;
 
 	// Information about the state of the reader
 	int tile_num;
@@ -132,6 +172,9 @@ private:
 	// Private function definitions
 	bool fillSequenceBuffer();
 	void addSequenceBuffer(int lane_num, int tile_num);
+	void writeRunInfo(std::unique_ptr<RunInfoContainer> runInfoList);
+
+	// Utility functions
 	void getFilePaths();
 	void init(std::string filename);
 };
