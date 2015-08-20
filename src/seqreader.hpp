@@ -23,7 +23,8 @@
 #include "kraken_headers.hpp"
 #include "Queue.h"
 #include <boost/filesystem.hpp>
-#include <boost/serialization/base_object.hpp>
+#include <boost/serialization/unordered_map.hpp>
+#include <boost/serialization/vector.hpp>
 #include <boost/archive/binary_oarchive.hpp>
 #include <boost/archive/binary_iarchive.hpp>
 #include <iostream>
@@ -67,21 +68,21 @@ struct RunInfoContainer{
 	TRunInfoList runInfoList;
 
 	RunInfoContainer(int count, int lane, int tile) : count(count), lane_num(lane), tile_num(tile) {
-		write_lock.lock();
+		processing_lock.lock(); // lock writing until all sequences have been read
 	};
 
 	std::atomic_uint count;
-	std::mutex write_lock;
+	std::mutex  processing_lock;
 
 	int lane_num;
 	int tile_num;
 
 	void increment_count(){
-		++count;
+		++count; // atomic increase
 
-		// Release run information for reading when all information has been updated.
+		// Release run information for writing when all information has been updated.
 		if (count == runInfoList.size())
-			write_lock.unlock();
+			processing_lock.unlock();
 	}
 
 };
@@ -94,6 +95,7 @@ struct DNASequence{
 
 	// only used for BCL reader, otherwise null
 	std::shared_ptr<SeqClassifyInfo> readInfo;
+	std::shared_ptr<RunInfoContainer> runContainer;
 
 	/*DNASequence() = default;
 	DNASequence(DNASequence&&) = default;
@@ -152,7 +154,7 @@ private:
 	std::vector<std::vector<path> > cyclePaths;
 	std::unordered_map<int, TTilePathMap> tmpPaths;
 
-	// data structures indicating
+	// data structures indicating read status
 	std::unordered_map<int, std::vector<bool> > readsFinished;
 	std::vector<bool> tileFinished;
 
@@ -160,8 +162,13 @@ private:
 	//std::vector<std::unique_ptr<SeqClassifyInfo> > runInfoList;
 	std::unique_ptr<TDNABuffer> sequenceBuffer;
 
+	// Threading data
+	// ------------------------
+	std::unordered_map<int, std::unordered_map<int, std::mutex> > writeLocks;
+
+	// Concurrent queues for the threads
 	Queue<std::unique_ptr<TDNABuffer> > concurrentBufferQueue;
-	Queue<std::unique_ptr<RunInfoContainer> > concurrentRunInfoQueue;
+	Queue<std::shared_ptr<RunInfoContainer> > concurrentRunInfoQueue;
 
 	// Information about the state of the reader
 	int tile_num;
@@ -172,7 +179,8 @@ private:
 	// Private function definitions
 	bool fillSequenceBuffer();
 	void addSequenceBuffer(int lane_num, int tile_num);
-	void writeRunInfo(std::unique_ptr<RunInfoContainer> runInfoList);
+	void saveRunInfo();
+	void writeInfo(std::shared_ptr<RunInfoContainer> runInfoContainer);
 
 	// Utility functions
 	void getFilePaths();

@@ -199,7 +199,7 @@ bool scanFilter(const fs::path &filter_path, std::vector<bool> &tile_index){
 
 // Scan the tile given in the tile_path and save sequences into the buffer
 bool scanTile(int tile_num, const fs::path &tile_path, std::vector<bool> &tile_filter,
-		std::unique_ptr<RunInfoContainer> &runInfo, std::unique_ptr<BCLReader::TDNABuffer> &buffer){
+		std::shared_ptr<RunInfoContainer> &runInfo, std::unique_ptr<BCLReader::TDNABuffer> &buffer){
 
 	std::ifstream in_file;
 	in_file.open(tile_path.c_str(), std::ios::in | std::ios::binary);
@@ -267,6 +267,7 @@ bool scanTile(int tile_num, const fs::path &tile_path, std::vector<bool> &tile_f
 				std::stringstream tmp;
 				tmp << tile_num << "_" << (pos+i);
 				buffer->at(rev_index).id = tmp.str();
+				buffer->at(rev_index).runContainer = runInfo;
 				runInfo->runInfoList.at(rev_index) = std::make_shared<SeqClassifyInfo>();
 				buffer->at(rev_index).readInfo 	= runInfo->runInfoList.at(rev_index);
 				//runInfo->at(rev_index) = buffer->at(rev_index).readInfo;
@@ -379,11 +380,13 @@ BCLReader::BCLReader(string filename, int length)
 DNASequence BCLReader::next_sequence() {
 	DNASequence dna;
 
+	// We can't read anything anymore and have noting buffered either -> end.
 	if (!_valid && concurrentBufferQueue.empty() && sequenceBuffer->empty()){
 		valid = false;
 		return dna;
 	}
 
+	// We execute this for the first time, start a sequence reader.
 	if (sequenceBuffer == nullptr){
 		LOG("Spawning new sequence reader thread. (" << tile_num << ")\n");
 		fillSequenceBuffer();
@@ -393,11 +396,20 @@ DNASequence BCLReader::next_sequence() {
 	// should have been filled by a concurrent thread. If the next buffer
 	// is not ready yet, the function blocks there and waits for it.
 	if (sequenceBuffer == nullptr || sequenceBuffer->empty()){
-		// When sequenceBuffer is empty, spawn a writer thread for temp information
-		if (sequenceBuffer != nullptr && sequenceBuffer->empty())
-			writeRunInfo(std::move(concurrentRunInfoQueue.pop()));
 
-		LOG("\nWaiting for buffer to be filled...\n");
+		// spawn a writer thread for temp information, if such information exists
+		// TODO: Ensure that writing only is done when nothing is being read (to improve IO performance)
+		// TODO: Refactor start of writer thread into own function.
+		if (sequenceBuffer != nullptr && sequenceBuffer->empty()){
+			saveRunInfo();
+		}
+
+#ifdef DEBUG
+		if (concurrentBufferQueue.empty())
+			LOG("\nWaiting for buffer to be filled...\n");
+#endif
+
+		// Get buffered reads.
 		sequenceBuffer = std::move(concurrentBufferQueue.pop()); // this is blocking
 
 		LOG(std::cout << "Found buffer. Size: " << sequenceBuffer->size() << "\n");
@@ -480,8 +492,7 @@ void BCLReader::addSequenceBuffer(int lane_num, int tile_num){
 	// Create new buffer to hold the reads.
 	std::unique_ptr<TDNABuffer> buffer(new TDNABuffer());
 	// Create new buffer for the classification state.
-	std::unique_ptr<RunInfoContainer> runInfo(new RunInfoContainer(0, lane_num, tile_num));
-	//std::unique_ptr<TRunInfoList> runInfo;
+	std::shared_ptr<RunInfoContainer> runInfo(new RunInfoContainer(0, lane_num, tile_num));
 
 	// create tile string for path construction
 	std::string tile_str("/s_" + std::to_string(lane_num) + "_" + std::to_string(tile_num));
@@ -496,7 +507,12 @@ void BCLReader::addSequenceBuffer(int lane_num, int tile_num){
 	// If temporary progress file exists, read it
 	// otherwise the SeqClassifyInfo is initialized empty later
 	if (fs::exists(tmpPaths[lane_num][tile_num])){
+		// wait for writing to finish, just in case
+		// (don't have to unlock again, since mutex is destroyed after)
+		//writeLocks[lane_num][tile_num].lock();
 		// put reading here
+
+
 	}
 
 	std::vector<bool> tile_filter;
@@ -519,24 +535,34 @@ void BCLReader::addSequenceBuffer(int lane_num, int tile_num){
 	LOG("Ended addSequenceBuffer" << tile_num << "\n");
 }
 
-void BCLReader::writeRunInfo(std::unique_ptr<RunInfoContainer> runInfoList){
-	std::ofstream ofs(tmpPaths[runInfoList->lane_num][runInfoList->tile_num].string());
+void BCLReader::saveRunInfo(){
+	std::shared_ptr<RunInfoContainer> tmp = std::move(concurrentRunInfoQueue.pop());
 
-	// wait for the runInfoList
-	std::cout << "Waiting for the release of the write lock...\n";
-	runInfoList->write_lock.lock();
+	// Lock the temporary file until the thread finished writing.
+	writeLocks[tmp->lane_num] = std::unordered_map<int, std::mutex>();
+	writeLocks[tmp->lane_num][tmp->tile_num].lock();
+	std::thread RunInfoWriter(&BCLReader::writeInfo, this, std::move(tmp));
+	RunInfoWriter.detach();
+}
 
-    {
-        boost::archive::binary_oarchive oa(ofs);
-		//for (std::shared_ptr<SeqClassifyInfo> seqInfo : (*runInfoList))
-		//	oa << *seqInfo; // write class instance to archive
+void BCLReader::writeInfo(std::shared_ptr<RunInfoContainer> runInfoContainer){
+	std::ofstream ofs(tmpPaths[runInfoContainer->lane_num][runInfoContainer->tile_num].string());
 
-    	// archive and stream closed when destructors are called
-    }
+		// wait for the runInfoList
+		std::cout << std::this_thread::get_id() << " - Waiting for the release of the write lock...\n";
+		runInfoContainer->processing_lock.lock();
+		std::cout << std::this_thread::get_id() << " - Obtained the write lock...\n";
+	    {
+	        boost::archive::binary_oarchive oa(ofs);
+	        for (TRunInfoList::iterator it = runInfoContainer->runInfoList.begin();
+	        		it != runInfoContainer->runInfoList.end(); ++it){
+	        	oa << *(*it);
+	        }
+	    }
 
-    runInfoList->write_lock.unlock();
-
-	return;
+	    // Note: We don't have to release processing_lock again since writeRunInfo is destroyed.
+	    // Release the writeLock to indicate that writing is finished.
+	    writeLocks[runInfoContainer->lane_num][runInfoContainer->tile_num].unlock();
 }
 
 // Utility functions

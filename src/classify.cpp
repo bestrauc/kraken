@@ -227,6 +227,7 @@ void process_file(char *filename) {
 				//std::cout << "Finalize\n";
 				classify_finalize(work_unit[j], kraken_output_ss,
 						classified_output_ss, unclassified_output_ss);
+				work_unit[j].runContainer->increment_count();
 			}
 
 			#pragma omp critical(write_output)
