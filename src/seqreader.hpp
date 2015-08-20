@@ -22,6 +22,7 @@
 
 #include "kraken_headers.hpp"
 #include "Queue.h"
+#include "filemanager.hpp"
 #include <boost/filesystem.hpp>
 #include <boost/serialization/unordered_map.hpp>
 #include <boost/serialization/vector.hpp>

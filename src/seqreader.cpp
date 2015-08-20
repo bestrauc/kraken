@@ -198,7 +198,7 @@ bool scanFilter(const fs::path &filter_path, std::vector<bool> &tile_index){
 }
 
 // Scan the tile given in the tile_path and save sequences into the buffer
-bool scanTile(int tile_num, const fs::path &tile_path, std::vector<bool> &tile_filter,
+bool scanTile(int tile_num, const fs::path &tile_path,
 		std::shared_ptr<RunInfoContainer> &runInfo, std::unique_ptr<BCLReader::TDNABuffer> &buffer){
 
 	std::ifstream in_file;
@@ -212,20 +212,18 @@ bool scanTile(int tile_num, const fs::path &tile_path, std::vector<bool> &tile_f
 	// Process file
 	uint32_t N; // number of clusters (sequences)
 	uint32_t pos = 0;
-	//static char raw_buffer[8192]; //or 4096?
 	static char raw_buffer[16384]; //or 4096?
 
 	in_file.read((char*)&N, 4);
 
 	// This should hold if all files are correct and were correctly read
-	assert(N == tile_filter.size());
+	//assert(N == tile_filter.size());
 
 	buffer->resize(N);
 
 	// If runInfo is not yet initialized, resize it and insert .
 	if (runInfo->runInfoList.size() != N){
 		runInfo->runInfoList.resize(N);
-//		std::generate_n(std::back_inserter(*runInfo), N, std::make_shared<SeqClassifyInfo>);
 	}
 
 	// Variables for timing measurement. (On one line to comment it out easily.)
@@ -246,8 +244,8 @@ bool scanTile(int tile_num, const fs::path &tile_path, std::vector<bool> &tile_f
 			uint32_t rev_index = N - index - 1;
 
 			// Skip those sequences that did not pass the quality filter.
-			if (tile_filter[index] == 0)
-				continue;
+			//if (tile_filter[index] == 0)
+			//	continue;
 
 			if (raw_buffer[i] == 0){ // no call if all 0 bits
 				base = 4; // will be converted to 'N'
@@ -270,13 +268,6 @@ bool scanTile(int tile_num, const fs::path &tile_path, std::vector<bool> &tile_f
 				buffer->at(rev_index).runContainer = runInfo;
 				runInfo->runInfoList.at(rev_index) = std::make_shared<SeqClassifyInfo>();
 				buffer->at(rev_index).readInfo 	= runInfo->runInfoList.at(rev_index);
-				//runInfo->at(rev_index) = buffer->at(rev_index).readInfo;
-
-				// Create new classification info if empty, read old one otherwise
-				/*if (runInfo->empty())
-					buffer->at(rev_index).readInfo 	= std::unique_ptr<SeqClassifyInfo>(new SeqClassifyInfo());
-				else
-					;// read old info here*/
 			}
 
 			// Save the qualities into the read buffer.
@@ -500,10 +491,6 @@ void BCLReader::addSequenceBuffer(int lane_num, int tile_num){
 	LOG(tile_str << "\n");
 	std::cout << tile_str << "\n";
 
-	// Make index of .filter file for current tile.
-	std::string s(lanePaths[lane_num-1].string() + tile_str + ".filter");
-
-
 	// If temporary progress file exists, read it
 	// otherwise the SeqClassifyInfo is initialized empty later
 	if (fs::exists(tmpPaths[lane_num][tile_num])){
@@ -511,19 +498,19 @@ void BCLReader::addSequenceBuffer(int lane_num, int tile_num){
 		// (don't have to unlock again, since mutex is destroyed after)
 		//writeLocks[lane_num][tile_num].lock();
 		// put reading here
-
-
 	}
 
-	std::vector<bool> tile_filter;
-	scanFilter(fs::path(s), tile_filter);
+	// Make index of .filter file for current tile.
+	//std::string s(lanePaths[lane_num-1].string() + tile_str + ".filter");
+	//std::vector<bool> tile_filter;
+	//scanFilter(fs::path(s), tile_filter);
 
 	// Process current tile in each cycle directory.
 	for (unsigned i=0; i < cyclePaths[lane_num-1].size(); ++i){
 		std::string s(cyclePaths[lane_num-1][i].string() + tile_str + ".bcl");
 
 		// Add bases of tile in the current cycle to the buffered reads.
-		if (scanTile(tile_num, fs::path(s), tile_filter, runInfo, buffer) == false){
+		if (scanTile(tile_num, fs::path(s), runInfo, buffer) == false){
 			_valid = false;
 		}
 	}
@@ -553,6 +540,8 @@ void BCLReader::writeInfo(std::shared_ptr<RunInfoContainer> runInfoContainer){
 		runInfoContainer->processing_lock.lock();
 		std::cout << std::this_thread::get_id() << " - Obtained the write lock...\n";
 	    {
+			// TODO: make a compression archive
+			// e.g.: http://stackoverflow.com/questions/4961155/boostiostream-zlib-compressing-multiple-files-into-one-archive
 	        boost::archive::binary_oarchive oa(ofs);
 	        for (TRunInfoList::iterator it = runInfoContainer->runInfoList.begin();
 	        		it != runInfoContainer->runInfoList.end(); ++it){

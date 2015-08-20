@@ -19,7 +19,8 @@ public:
 	BCLFileManager(std::string basecalls_folder);
 	TileInfo getNextTile();
 
-//private:
+private:
+	// Tile info by lane
 
 };
 
