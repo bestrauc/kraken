@@ -25,7 +25,7 @@ db_sort: krakendb.o quickfile.o
 set_lcas: krakendb.o quickfile.o krakenutil.o seqreader.o
 	$(CXX) $(CXXFLAGS) $(LDFLAGS) set_lcas.cpp krakendb.o quickfile.o krakenutil.o seqreader.o -o set_lcas $(LOADLIBES) $(LDLIBS) -lboost_serialization -lboost_system -lboost_filesystem
 
-classify: classify.cpp krakendb.o quickfile.o krakenutil.o seqreader.o
+classify: classify.cpp krakendb.o quickfile.o krakenutil.o seqreader.o filemanager.o
 	$(CXX) $(CXXFLAGS) $(LDFLAGS) classify.cpp krakendb.o quickfile.o krakenutil.o seqreader.o -o classify $(LOADLIBES) $(LDLIBS) -lboost_serialization -lboost_system -lboost_filesystem
 
 make_seqid_to_taxid_map: quickfile.o
@@ -41,3 +41,6 @@ seqreader.o: seqreader.cpp seqreader.hpp quickfile.hpp
 
 quickfile.o: quickfile.cpp quickfile.hpp
 	$(CXX) $(CXXFLAGS) -c quickfile.cpp
+	
+filemanager.o: filemanager.cpp filemanager.hpp
+	$(CXX) $(CXXFLAGS) -c filemanager.cpp
