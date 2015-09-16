@@ -28,9 +28,8 @@
 #include <boost/serialization/vector.hpp>
 #include <boost/archive/binary_oarchive.hpp>
 #include <boost/archive/binary_iarchive.hpp>
-#include <iostream>
-#include <memory>
-#include <algorithm>
+
+
 
 // Concurrency related headers
 #include <thread>
@@ -154,6 +153,8 @@ private:
 	std::vector<path> lanePaths;
 	std::vector<std::vector<path> > cyclePaths;
 	std::unordered_map<int, TTilePathMap> tmpPaths;
+
+	BCLFileManager fileManager;
 
 	// data structures indicating read status
 	std::unordered_map<int, std::vector<bool> > readsFinished;

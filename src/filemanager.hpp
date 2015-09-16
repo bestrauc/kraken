@@ -10,17 +10,30 @@ namespace kraken {
 
 struct TileInfo{
 	std::vector<path> tile_paths;
-	int first_tile; // first tile to process
-	int last_tile;  // last valid tile available
+	//int first_tile; // first tile to process
+	//int last_tile;  // last valid tile available
 };
 
 class BCLFileManager {
 public:
 	BCLFileManager(std::string basecalls_folder);
-	TileInfo getNextTile();
+	TileInfo getTile();
+
+	bool is_valid();
 
 private:
-	// Tile info by lane
+	typedef std::unordered_map<int, path> TTilePathMap;
+
+	path basecalls_path;
+
+	std::vector<path> lanePaths;
+	std::vector<std::vector<path> > cyclePaths;
+	std::unordered_map<int, TTilePathMap> tmpPaths;
+
+	bool valid;
+
+
+	void getFilePaths();
 
 };
 

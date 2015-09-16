@@ -17,7 +17,6 @@
  * along with Kraken.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "kraken_headers.hpp"
 #include "seqreader.hpp"
 
 // for timing and debug
@@ -353,14 +352,14 @@ void BCLReader::init(string filename){
 }
 
 
-BCLReader::BCLReader(string filename)
-: tile_num(1101), lane_num(1), read_length(-1) {
-	this->init(filename);
+BCLReader::BCLReader(string file_name)
+: fileManager(file_name), tile_num(1101), lane_num(1), read_length(-1) {
+	this->init(file_name);
 }
 
-BCLReader::BCLReader(string filename, int length)
-: tile_num(1101), lane_num(1), read_length(length) {
-	this->init(filename);
+BCLReader::BCLReader(string file_name, int length)
+: fileManager(file_name), tile_num(1101), lane_num(1), read_length(length) {
+	this->init(file_name);
 }
 
 /*BCLReader::BCLReader(string filename, int length, std::vector<SeqClassifyInfo> *runInfoList)
