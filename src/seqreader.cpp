@@ -284,17 +284,6 @@ bool scanTile(int tile_num, const fs::path &tile_path,
 	return true;
 }
 
-// Comparator function for sorting the cycles (C1.1,..,C201.1,..)
-bool cyclePathCompare(const fs::path &p1, const fs::path &p2){
-	std::string s1 = p1.filename().string();
-	std::string s2 = p2.filename().string();
-
-	int i1 = std::stoi(s1.substr(1, s1.find(".")-1));
-	int i2 = std::stoi(s2.substr(1, s2.find(".")-1));
-
-	return i1 < i2;
-}
-
 // Given a tile, advance it to the next tile number.
 // (I.e. 1216 -> 1301 or 1316 -> 2101)
 int getNextTile(int tile){
@@ -330,25 +319,13 @@ int getNextTile(int tile){
 //              BCL READER class
 //-----------------------------------------------------------
 void BCLReader::init(string filename){
-	basecalls_path = fs::path(filename);
-	if (!fs::exists(basecalls_path)){
-		err(EX_NOINPUT, "%s not found.", filename.c_str());
-	}
-
-	if (fs::is_regular_file(basecalls_path)){
-		valid = false;
-		err(EX_NOINPUT, "File given. 'BaseCalls' directory expected.");
-	}
-
-	// Scan target directory and get all paths for each of the lane folders.
-	getFilePaths();
 
 	// We have two values for false. "_valid" is used internally and
 	// is false if no new buffer can be filled. "valid" is used for the
 	// external interface and is false if the last buffer is exhausted.
 	// _valid will always be set to false before valid
-	valid = true;
-	_valid = true;
+	_valid = fileManager.is_valid();
+	valid = _valid;
 }
 
 
@@ -362,10 +339,6 @@ BCLReader::BCLReader(string file_name, int length)
 	this->init(file_name);
 }
 
-/*BCLReader::BCLReader(string filename, int length, std::vector<SeqClassifyInfo> *runInfoList)
-: runInfoList(runInfoList), tile_num(1101), lane_num(1), read_length(length) {
-	this->init(filename);
-}*/
 
 DNASequence BCLReader::next_sequence() {
 	DNASequence dna;
@@ -452,8 +425,10 @@ bool BCLReader::fillSequenceBuffer(){
 	}
 
 	// If current lane directory cannot be found.
-	if (!_valid)
+	if (!fileManager.is_valid())
 		return false;
+
+	TileInfo tile = fileManager.getTile();
 
 	// Start thread that reads the BCL tile file into a buffer.
 	std::thread sequenceReader(&BCLReader::addSequenceBuffer, this, lane_num, tile_num);
@@ -552,44 +527,4 @@ void BCLReader::writeInfo(std::shared_ptr<RunInfoContainer> runInfoContainer){
 	    // Release the writeLock to indicate that writing is finished.
 	    writeLocks[runInfoContainer->lane_num][runInfoContainer->tile_num].unlock();
 }
-
-// Utility functions
-
-void BCLReader::getFilePaths(){
-	copy_if(fs::directory_iterator(basecalls_path), fs::directory_iterator(), back_inserter(lanePaths),
-			[&](const fs::path& p){
-		return (p.filename().string()[0] == 'L');
-	}
-	);
-
-	sort(lanePaths.begin(), lanePaths.end());
-
-	for (fs::path &path : lanePaths){
-		cyclePaths.push_back(vector<fs::path>());
-		copy_if(fs::directory_iterator(path), fs::directory_iterator(), back_inserter(cyclePaths.back()),
-				[&](const fs::path& p){
-					return (fs::is_directory(p) && p.filename().string()[0] == 'C');
-				}
-		);
-
-		sort(cyclePaths.back().begin(), cyclePaths.back().end(), cyclePathCompare);
-		copy(cyclePaths.back().begin(), cyclePaths.back().end(), ostream_iterator<fs::path>(cout, "\n"));
-	}
-
-	std::cout << "Found " << lanePaths.size() << " lane directories.\n";
-	copy(lanePaths.begin(), lanePaths.end(), ostream_iterator<fs::path>(cout, "\n"));
-
-	std::cout << "Setting up paths for temporary directories.\n";
-	for (size_t i=0; i < lanePaths.size(); ++i){
-		tmpPaths.insert(std::make_pair<int, TTilePathMap>(i+1, TTilePathMap()));
-
-		size_t j=1101;
-		do{
-			std::string s(lanePaths[i].string() + "/" + std::to_string(j) + ".filter");
-			tmpPaths[i+1][j] = fs::path(s);
-			std::cout << tmpPaths[i+1][j].string() << "\n";
-		} while( (j = getNextTile(j)) );
-	}
-}
-
 } // namespace

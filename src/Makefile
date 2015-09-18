@@ -36,8 +36,8 @@ krakenutil.o: krakenutil.cpp krakenutil.hpp
 krakendb.o: krakendb.cpp krakendb.hpp quickfile.hpp
 	$(CXX) $(CXXFLAGS) -c krakendb.cpp
 
-seqreader.o: seqreader.cpp seqreader.hpp quickfile.hpp
-	$(CXX) $(CXXFLAGS) -c seqreader.cpp
+seqreader.o: seqreader.cpp seqreader.hpp quickfile.hpp filemanager.hpp
+	$(CXX) $(CXXFLAGS) -c seqreader.cpp 
 
 quickfile.o: quickfile.cpp quickfile.hpp
 	$(CXX) $(CXXFLAGS) -c quickfile.cpp

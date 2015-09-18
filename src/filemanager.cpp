@@ -65,6 +65,10 @@ namespace kraken {
 		return valid;
 	}
 
+	TileInfo BCLFileManager::getTile(){
+		return TileInfo();
+	}
+
 	void BCLFileManager::getFilePaths(){
 		copy_if(directory_iterator(basecalls_path), directory_iterator(), back_inserter(lanePaths),
 				[&](const fs::path& p){
