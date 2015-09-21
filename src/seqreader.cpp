@@ -17,7 +17,6 @@
  * along with Kraken.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "kraken_headers.hpp"
 #include "seqreader.hpp"
 
 // for timing and debug
@@ -198,8 +197,8 @@ bool scanFilter(const fs::path &filter_path, std::vector<bool> &tile_index){
 }
 
 // Scan the tile given in the tile_path and save sequences into the buffer
-bool scanTile(int tile_num, const fs::path &tile_path, std::vector<bool> &tile_filter,
-		std::unique_ptr<RunInfoContainer> &runInfo, std::unique_ptr<BCLReader::TDNABuffer> &buffer){
+bool scanTile(int tile_num, const fs::path &tile_path,
+		std::shared_ptr<RunInfoContainer> &runInfo, std::unique_ptr<BCLReader::TDNABuffer> &buffer){
 
 	std::ifstream in_file;
 	in_file.open(tile_path.c_str(), std::ios::in | std::ios::binary);
@@ -212,20 +211,18 @@ bool scanTile(int tile_num, const fs::path &tile_path, std::vector<bool> &tile_f
 	// Process file
 	uint32_t N; // number of clusters (sequences)
 	uint32_t pos = 0;
-	//static char raw_buffer[8192]; //or 4096?
 	static char raw_buffer[16384]; //or 4096?
 
 	in_file.read((char*)&N, 4);
 
 	// This should hold if all files are correct and were correctly read
-	assert(N == tile_filter.size());
+	//assert(N == tile_filter.size());
 
 	buffer->resize(N);
 
 	// If runInfo is not yet initialized, resize it and insert .
 	if (runInfo->runInfoList.size() != N){
 		runInfo->runInfoList.resize(N);
-//		std::generate_n(std::back_inserter(*runInfo), N, std::make_shared<SeqClassifyInfo>);
 	}
 
 	// Variables for timing measurement. (On one line to comment it out easily.)
@@ -246,8 +243,8 @@ bool scanTile(int tile_num, const fs::path &tile_path, std::vector<bool> &tile_f
 			uint32_t rev_index = N - index - 1;
 
 			// Skip those sequences that did not pass the quality filter.
-			if (tile_filter[index] == 0)
-				continue;
+			//if (tile_filter[index] == 0)
+			//	continue;
 
 			if (raw_buffer[i] == 0){ // no call if all 0 bits
 				base = 4; // will be converted to 'N'
@@ -267,15 +264,9 @@ bool scanTile(int tile_num, const fs::path &tile_path, std::vector<bool> &tile_f
 				std::stringstream tmp;
 				tmp << tile_num << "_" << (pos+i);
 				buffer->at(rev_index).id = tmp.str();
+				buffer->at(rev_index).runContainer = runInfo;
 				runInfo->runInfoList.at(rev_index) = std::make_shared<SeqClassifyInfo>();
 				buffer->at(rev_index).readInfo 	= runInfo->runInfoList.at(rev_index);
-				//runInfo->at(rev_index) = buffer->at(rev_index).readInfo;
-
-				// Create new classification info if empty, read old one otherwise
-				/*if (runInfo->empty())
-					buffer->at(rev_index).readInfo 	= std::unique_ptr<SeqClassifyInfo>(new SeqClassifyInfo());
-				else
-					;// read old info here*/
 			}
 
 			// Save the qualities into the read buffer.
@@ -291,17 +282,6 @@ bool scanTile(int tile_num, const fs::path &tile_path, std::vector<bool> &tile_f
 	//LOG("Tile processing time " << process_time + read_time << "\n");
 	//std::cout << "Tile processing time " << process_time << ". Read time " << read_time << "\n";
 	return true;
-}
-
-// Comparator function for sorting the cycles (C1.1,..,C201.1,..)
-bool cyclePathCompare(const fs::path &p1, const fs::path &p2){
-	std::string s1 = p1.filename().string();
-	std::string s2 = p2.filename().string();
-
-	int i1 = std::stoi(s1.substr(1, s1.find(".")-1));
-	int i2 = std::stoi(s2.substr(1, s2.find(".")-1));
-
-	return i1 < i2;
 }
 
 // Given a tile, advance it to the next tile number.
@@ -339,51 +319,37 @@ int getNextTile(int tile){
 //              BCL READER class
 //-----------------------------------------------------------
 void BCLReader::init(string filename){
-	basecalls_path = fs::path(filename);
-	if (!fs::exists(basecalls_path)){
-		err(EX_NOINPUT, "%s not found.", filename.c_str());
-	}
-
-	if (fs::is_regular_file(basecalls_path)){
-		valid = false;
-		err(EX_NOINPUT, "File given. 'BaseCalls' directory expected.");
-	}
-
-	// Scan target directory and get all paths for each of the lane folders.
-	getFilePaths();
 
 	// We have two values for false. "_valid" is used internally and
 	// is false if no new buffer can be filled. "valid" is used for the
 	// external interface and is false if the last buffer is exhausted.
 	// _valid will always be set to false before valid
-	valid = true;
-	_valid = true;
+	_valid = fileManager.is_valid();
+	valid = _valid;
 }
 
 
-BCLReader::BCLReader(string filename)
-: tile_num(1101), lane_num(1), read_length(-1) {
-	this->init(filename);
+BCLReader::BCLReader(string file_name)
+: fileManager(file_name), tile_num(1101), lane_num(1), read_length(-1) {
+	this->init(file_name);
 }
 
-BCLReader::BCLReader(string filename, int length)
-: tile_num(1101), lane_num(1), read_length(length) {
-	this->init(filename);
+BCLReader::BCLReader(string file_name, int length)
+: fileManager(file_name), tile_num(1101), lane_num(1), read_length(length) {
+	this->init(file_name);
 }
 
-/*BCLReader::BCLReader(string filename, int length, std::vector<SeqClassifyInfo> *runInfoList)
-: runInfoList(runInfoList), tile_num(1101), lane_num(1), read_length(length) {
-	this->init(filename);
-}*/
 
 DNASequence BCLReader::next_sequence() {
 	DNASequence dna;
 
+	// We can't read anything anymore and have noting buffered either -> end.
 	if (!_valid && concurrentBufferQueue.empty() && sequenceBuffer->empty()){
 		valid = false;
 		return dna;
 	}
 
+	// We execute this for the first time, start a sequence reader.
 	if (sequenceBuffer == nullptr){
 		LOG("Spawning new sequence reader thread. (" << tile_num << ")\n");
 		fillSequenceBuffer();
@@ -393,11 +359,20 @@ DNASequence BCLReader::next_sequence() {
 	// should have been filled by a concurrent thread. If the next buffer
 	// is not ready yet, the function blocks there and waits for it.
 	if (sequenceBuffer == nullptr || sequenceBuffer->empty()){
-		// When sequenceBuffer is empty, spawn a writer thread for temp information
-		if (sequenceBuffer != nullptr && sequenceBuffer->empty())
-			writeRunInfo(std::move(concurrentRunInfoQueue.pop()));
 
-		LOG("\nWaiting for buffer to be filled...\n");
+		// spawn a writer thread for temp information, if such information exists
+		// TODO: Ensure that writing only is done when nothing is being read (to improve IO performance)
+		// TODO: Refactor start of writer thread into own function.
+		if (sequenceBuffer != nullptr && sequenceBuffer->empty()){
+			saveRunInfo();
+		}
+
+#ifdef DEBUG
+		if (concurrentBufferQueue.empty())
+			LOG("\nWaiting for buffer to be filled...\n");
+#endif
+
+		// Get buffered reads.
 		sequenceBuffer = std::move(concurrentBufferQueue.pop()); // this is blocking
 
 		LOG(std::cout << "Found buffer. Size: " << sequenceBuffer->size() << "\n");
@@ -450,8 +425,10 @@ bool BCLReader::fillSequenceBuffer(){
 	}
 
 	// If current lane directory cannot be found.
-	if (!_valid)
+	if (!fileManager.is_valid())
 		return false;
+
+	TileInfo tile = fileManager.getTile();
 
 	// Start thread that reads the BCL tile file into a buffer.
 	std::thread sequenceReader(&BCLReader::addSequenceBuffer, this, lane_num, tile_num);
@@ -480,8 +457,7 @@ void BCLReader::addSequenceBuffer(int lane_num, int tile_num){
 	// Create new buffer to hold the reads.
 	std::unique_ptr<TDNABuffer> buffer(new TDNABuffer());
 	// Create new buffer for the classification state.
-	std::unique_ptr<RunInfoContainer> runInfo(new RunInfoContainer(0, lane_num, tile_num));
-	//std::unique_ptr<TRunInfoList> runInfo;
+	std::shared_ptr<RunInfoContainer> runInfo(new RunInfoContainer(0, lane_num, tile_num));
 
 	// create tile string for path construction
 	std::string tile_str("/s_" + std::to_string(lane_num) + "_" + std::to_string(tile_num));
@@ -489,25 +465,26 @@ void BCLReader::addSequenceBuffer(int lane_num, int tile_num){
 	LOG(tile_str << "\n");
 	std::cout << tile_str << "\n";
 
-	// Make index of .filter file for current tile.
-	std::string s(lanePaths[lane_num-1].string() + tile_str + ".filter");
-
-
 	// If temporary progress file exists, read it
 	// otherwise the SeqClassifyInfo is initialized empty later
 	if (fs::exists(tmpPaths[lane_num][tile_num])){
+		// wait for writing to finish, just in case
+		// (don't have to unlock again, since mutex is destroyed after)
+		//writeLocks[lane_num][tile_num].lock();
 		// put reading here
 	}
 
-	std::vector<bool> tile_filter;
-	scanFilter(fs::path(s), tile_filter);
+	// Make index of .filter file for current tile.
+	//std::string s(lanePaths[lane_num-1].string() + tile_str + ".filter");
+	//std::vector<bool> tile_filter;
+	//scanFilter(fs::path(s), tile_filter);
 
 	// Process current tile in each cycle directory.
 	for (unsigned i=0; i < cyclePaths[lane_num-1].size(); ++i){
 		std::string s(cyclePaths[lane_num-1][i].string() + tile_str + ".bcl");
 
 		// Add bases of tile in the current cycle to the buffered reads.
-		if (scanTile(tile_num, fs::path(s), tile_filter, runInfo, buffer) == false){
+		if (scanTile(tile_num, fs::path(s), runInfo, buffer) == false){
 			_valid = false;
 		}
 	}
@@ -519,63 +496,35 @@ void BCLReader::addSequenceBuffer(int lane_num, int tile_num){
 	LOG("Ended addSequenceBuffer" << tile_num << "\n");
 }
 
-void BCLReader::writeRunInfo(std::unique_ptr<RunInfoContainer> runInfoList){
-	std::ofstream ofs(tmpPaths[runInfoList->lane_num][runInfoList->tile_num].string());
+void BCLReader::saveRunInfo(){
+	std::shared_ptr<RunInfoContainer> tmp = std::move(concurrentRunInfoQueue.pop());
 
-	// wait for the runInfoList
-	std::cout << "Waiting for the release of the write lock...\n";
-	runInfoList->write_lock.lock();
-
-    {
-        boost::archive::binary_oarchive oa(ofs);
-		//for (std::shared_ptr<SeqClassifyInfo> seqInfo : (*runInfoList))
-		//	oa << *seqInfo; // write class instance to archive
-
-    	// archive and stream closed when destructors are called
-    }
-
-    runInfoList->write_lock.unlock();
-
-	return;
+	// Lock the temporary file until the thread finished writing.
+	writeLocks[tmp->lane_num] = std::unordered_map<int, std::mutex>();
+	writeLocks[tmp->lane_num][tmp->tile_num].lock();
+	std::thread RunInfoWriter(&BCLReader::writeInfo, this, std::move(tmp));
+	RunInfoWriter.detach();
 }
 
-// Utility functions
+void BCLReader::writeInfo(std::shared_ptr<RunInfoContainer> runInfoContainer){
+	std::ofstream ofs(tmpPaths[runInfoContainer->lane_num][runInfoContainer->tile_num].string());
 
-void BCLReader::getFilePaths(){
-	copy_if(fs::directory_iterator(basecalls_path), fs::directory_iterator(), back_inserter(lanePaths),
-			[&](const fs::path& p){
-		return (p.filename().string()[0] == 'L');
-	}
-	);
+		// wait for the runInfoList
+		std::cout << std::this_thread::get_id() << " - Waiting for the release of the write lock...\n";
+		runInfoContainer->processing_lock.lock();
+		std::cout << std::this_thread::get_id() << " - Obtained the write lock...\n";
+	    {
+			// TODO: make a compression archive
+			// e.g.: http://stackoverflow.com/questions/4961155/boostiostream-zlib-compressing-multiple-files-into-one-archive
+	        boost::archive::binary_oarchive oa(ofs);
+	        for (TRunInfoList::iterator it = runInfoContainer->runInfoList.begin();
+	        		it != runInfoContainer->runInfoList.end(); ++it){
+	        	oa << *(*it);
+	        }
+	    }
 
-	sort(lanePaths.begin(), lanePaths.end());
-
-	for (fs::path &path : lanePaths){
-		cyclePaths.push_back(vector<fs::path>());
-		copy_if(fs::directory_iterator(path), fs::directory_iterator(), back_inserter(cyclePaths.back()),
-				[&](const fs::path& p){
-					return (fs::is_directory(p) && p.filename().string()[0] == 'C');
-				}
-		);
-
-		sort(cyclePaths.back().begin(), cyclePaths.back().end(), cyclePathCompare);
-		copy(cyclePaths.back().begin(), cyclePaths.back().end(), ostream_iterator<fs::path>(cout, "\n"));
-	}
-
-	std::cout << "Found " << lanePaths.size() << " lane directories.\n";
-	copy(lanePaths.begin(), lanePaths.end(), ostream_iterator<fs::path>(cout, "\n"));
-
-	std::cout << "Setting up paths for temporary directories.\n";
-	for (size_t i=0; i < lanePaths.size(); ++i){
-		tmpPaths.insert(std::make_pair<int, TTilePathMap>(i+1, TTilePathMap()));
-
-		size_t j=1101;
-		do{
-			std::string s(lanePaths[i].string() + "/" + std::to_string(j) + ".filter");
-			tmpPaths[i+1][j] = fs::path(s);
-			std::cout << tmpPaths[i+1][j].string() << "\n";
-		} while( (j = getNextTile(j)) );
-	}
+	    // Note: We don't have to release processing_lock again since writeRunInfo is destroyed.
+	    // Release the writeLock to indicate that writing is finished.
+	    writeLocks[runInfoContainer->lane_num][runInfoContainer->tile_num].unlock();
 }
-
 } // namespace

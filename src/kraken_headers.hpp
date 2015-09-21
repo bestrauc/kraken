@@ -48,5 +48,9 @@
 #include <unistd.h>
 #include <vector>
 #include <algorithm>
+#include <iostream>
+#include <memory>
+#include <iterator>
+
 
 #endif
