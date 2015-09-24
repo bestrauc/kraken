@@ -31,11 +31,6 @@
 
 
 
-// Concurrency related headers
-#include <thread>
-#include <atomic>
-#include <mutex>
-
 using namespace boost::filesystem;
 
 namespace kraken {
@@ -156,6 +151,7 @@ private:
 
 	BCLFileManager fileManager;
 
+
 	// data structures indicating read status
 	std::unordered_map<int, std::vector<bool> > readsFinished;
 	std::vector<bool> tileFinished;
@@ -173,14 +169,14 @@ private:
 	Queue<std::shared_ptr<RunInfoContainer> > concurrentRunInfoQueue;
 
 	// Information about the state of the reader
-	int tile_num;
-	int lane_num;
+	//int tile_num;
+	//int lane_num;
 	int read_length;
 	bool valid,_valid;
 
 	// Private function definitions
 	bool fillSequenceBuffer();
-	void addSequenceBuffer(int lane_num, int tile_num);
+	void addSequenceBuffer(TileInfo tile);
 	void saveRunInfo();
 	void writeInfo(std::shared_ptr<RunInfoContainer> runInfoContainer);
 

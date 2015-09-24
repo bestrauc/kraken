@@ -215,6 +215,7 @@ void process_file(char *filename) {
 			kraken_output_ss.str("");
 			classified_output_ss.str("");
 			unclassified_output_ss.str("");
+
 			for (size_t j = 0; j < work_unit.size(); j++){
 				/*classify_sequence(work_unit[j], kraken_output_ss,
 						classified_output_ss, unclassified_output_ss);*/

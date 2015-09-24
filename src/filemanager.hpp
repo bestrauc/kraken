@@ -9,28 +9,39 @@ using namespace boost::filesystem;
 namespace kraken {
 
 struct TileInfo{
-	std::vector<path> tile_paths;
-	//int first_tile; // first tile to process
-	//int last_tile;  // last valid tile available
+	//std::vector<path> tile_paths;
+	int lane_num;
+	int tile_num;
+	int first_tile; // first tile to process
+	int last_tile;  // last valid tile available
 };
 
 class BCLFileManager {
 public:
-	BCLFileManager(std::string basecalls_folder);
+	BCLFileManager(std::string basecalls_folder, int length);
 	TileInfo getTile();
 
 	bool is_valid();
 
-private:
 	typedef std::unordered_map<int, path> TTilePathMap;
 
-	path basecalls_path;
-
-	std::vector<path> lanePaths;
 	std::vector<std::vector<path> > cyclePaths;
 	std::unordered_map<int, TTilePathMap> tmpPaths;
 
-	bool valid;
+	// remember the last cycle we processed the tile in
+	std::unordered_map<int, int> lastTileCycle;
+private:
+
+	path basecalls_path;
+	std::vector<path> lanePaths;
+	int active_tile = 1101;
+	int active_lane = 1;
+	int length;
+	int step = 10;
+
+	bool end_reached;
+
+	bool valid = true;
 
 
 	void getFilePaths();

@@ -46,8 +46,10 @@ bool cyclePathCompare(const fs::path &p1, const fs::path &p2){
 
 namespace kraken {
 
-	BCLFileManager::BCLFileManager(std::string basecalls_folder){
+	BCLFileManager::BCLFileManager(std::string basecalls_folder, int length){
 		basecalls_path = fs::path(basecalls_folder);
+		this->length = length;
+
 		if (!fs::exists(basecalls_path)){
 			err(EX_NOINPUT, "%s not found.", basecalls_folder.c_str());
 		}
@@ -65,8 +67,51 @@ namespace kraken {
 		return valid;
 	}
 
+	// Return the next tile we want to scan and return the cycle tiles
+	// we have not read before. We return the bases from the last read tile
+	// to the most recent available tile.
 	TileInfo BCLFileManager::getTile(){
-		return TileInfo();
+		if (!valid)
+			return TileInfo();
+
+		// when we have read all tiles
+		if (active_tile == 0){
+			std::cout << "END: " << end_reached << "\n";
+
+			// check if we reached the last cycle of the last tile -> end
+			if (end_reached){
+				valid = false;
+				return TileInfo();
+			}
+
+			// if not, go to the first tile and wait do remaining cycles
+			active_tile = 1101;
+		}
+
+		assert(length==cyclePaths[0].size());
+
+		// check if the next 'step' cycles were generated for the active_tile
+		// otherwise we wait (blocks successive tiles too, but we read all together)
+		int last_cycle = lastTileCycle[active_tile];
+		int target_cycle = std::min(last_cycle + step, length-1);
+
+		while (!fs::exists(cyclePaths[active_lane-1][target_cycle]))
+			std::this_thread::sleep_for(std::chrono::minutes(5));
+
+		// add cycles that exist beyond our target cycle
+		while (target_cycle < length && fs::exists(cyclePaths[active_lane-1][target_cycle]))
+			target_cycle += 1;
+
+		end_reached = target_cycle == (length-1);
+
+		std::cout << active_tile << "  " << last_cycle+1 << "  " << target_cycle << "\n";
+
+		// return the [start,end] cycle indices as TileInfo, with tile and lane
+		TileInfo ret = {active_lane, active_tile, last_cycle+1, target_cycle};
+
+		active_tile = getNextTile(active_tile);
+
+		return ret;
 	}
 
 	void BCLFileManager::getFilePaths(){
@@ -86,7 +131,9 @@ namespace kraken {
 					}
 			);
 
+			// sort cycle paths by keys C1.1, C2.1,...,Cl.1..
 			sort(cyclePaths.back().begin(), cyclePaths.back().end(), cyclePathCompare);
+			// write to standard output
 			copy(cyclePaths.back().begin(), cyclePaths.back().end(), std::ostream_iterator<fs::path>(std::cout, "\n"));
 		}
 
@@ -101,8 +148,10 @@ namespace kraken {
 			do{
 				std::string s(lanePaths[i].string() + "/" + std::to_string(j) + ".filter");
 				tmpPaths[i+1][j] = path(s);
-				std::cout << tmpPaths[i+1][j].string() << "\n";
+				//std::cout << tmpPaths[i+1][j].string() << "\n";
 			} while( (j = getNextTile(j)) );
 		}
+
+		std::cout << "SCAN FINNISCHED \n";
 	}
 }

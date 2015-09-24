@@ -330,12 +330,12 @@ void BCLReader::init(string filename){
 
 
 BCLReader::BCLReader(string file_name)
-: fileManager(file_name), tile_num(1101), lane_num(1), read_length(-1) {
+: fileManager(file_name, 0), read_length(-1) {
 	this->init(file_name);
 }
 
 BCLReader::BCLReader(string file_name, int length)
-: fileManager(file_name), tile_num(1101), lane_num(1), read_length(length) {
+: fileManager(file_name, length), read_length(length) {
 	this->init(file_name);
 }
 
@@ -363,9 +363,9 @@ DNASequence BCLReader::next_sequence() {
 		// spawn a writer thread for temp information, if such information exists
 		// TODO: Ensure that writing only is done when nothing is being read (to improve IO performance)
 		// TODO: Refactor start of writer thread into own function.
-		if (sequenceBuffer != nullptr && sequenceBuffer->empty()){
-			saveRunInfo();
-		}
+		//if (sequenceBuffer != nullptr && sequenceBuffer->empty()){
+		//	saveRunInfo();
+		//}
 
 #ifdef DEBUG
 		if (concurrentBufferQueue.empty())
@@ -414,7 +414,7 @@ bool BCLReader::fillSequenceBuffer(){
 	// Set directory pointer to the next lane folder (L00..) if we
 	// have read all tiles in the current lane (i.e. reached tile 2316).
 	// 0 is a pseudo-tile name indicating that we have read all tiles.
-	if (tile_num == 0){
+	/*if (tile_num == 0){
 		tile_num = 1101;
 
 		// If we don't have another lane directory, end scan.
@@ -422,52 +422,58 @@ bool BCLReader::fillSequenceBuffer(){
 			_valid = false;
 		else
 			lane_num++;
-	}
+	}*/
 
-	// If current lane directory cannot be found.
-	if (!fileManager.is_valid())
-		return false;
+	std::cout << "GET TILE SOON\n";
 
 	TileInfo tile = fileManager.getTile();
 
+	//std::cout << "AERNAERNE " << fileManager.is_valid() << "\n";
+
+	// If we are at the end.
+	if (!fileManager.is_valid())
+		return false;
+
+	std::cout << "GOTTEN TILE: " << tile.first_tile << " " << tile.last_tile << "\n";
+
 	// Start thread that reads the BCL tile file into a buffer.
-	std::thread sequenceReader(&BCLReader::addSequenceBuffer, this, lane_num, tile_num);
+	std::thread sequenceReader(&BCLReader::addSequenceBuffer, this, tile);
 
 	// Tile processing thread runs independently, we will block later to wait.
 	sequenceReader.detach();
 
 
 	// Get the next tile number (processed in the next call of this function.)
-	tile_num = getNextTile(tile_num);
+	//tile_num = getNextTile(tile_num);
 
 	// Check if the next tile exists. If not, end reading.
 	// XXX: Makes it abort when less than 96 tiles are found. Always intended?
-	std::string tile_str(cyclePaths[lane_num-1][0].string() + "/s_" + std::to_string(lane_num) + "_" + std::to_string(tile_num) + ".bcl");
-	if (tile_num != 0 && !fs::exists(fs::path(tile_str)))
-		_valid = false;
-	return false;
+	//std::string tile_str(cyclePaths[lane_num-1][0].string() + "/s_" + std::to_string(lane_num) + "_" + std::to_string(tile_num) + ".bcl");
+	//if (tile_num != 0 && !fs::exists(fs::path(tile_str)))
+	//	_valid = false;
+	//return false;
 
 	return true;
 }
 
 // Creates a new sequence buffer, fills it with reads from the tile numbered
 // "tile_num" and adds it to the Queue of buffers which Kraken consumes.
-void BCLReader::addSequenceBuffer(int lane_num, int tile_num){
-	LOG("Entered addSequenceBuffer " << tile_num << "\n");
+void BCLReader::addSequenceBuffer(TileInfo tile){
+	LOG("Entered addSequenceBuffer " << tile.tile_num << "\n");
 	// Create new buffer to hold the reads.
 	std::unique_ptr<TDNABuffer> buffer(new TDNABuffer());
 	// Create new buffer for the classification state.
-	std::shared_ptr<RunInfoContainer> runInfo(new RunInfoContainer(0, lane_num, tile_num));
+	std::shared_ptr<RunInfoContainer> runInfo(new RunInfoContainer(0, tile.lane_num, tile.tile_num));
 
 	// create tile string for path construction
-	std::string tile_str("/s_" + std::to_string(lane_num) + "_" + std::to_string(tile_num));
+	std::string tile_str("/s_" + std::to_string(tile.lane_num) + "_" + std::to_string(tile.tile_num));
 
 	LOG(tile_str << "\n");
 	std::cout << tile_str << "\n";
 
 	// If temporary progress file exists, read it
 	// otherwise the SeqClassifyInfo is initialized empty later
-	if (fs::exists(tmpPaths[lane_num][tile_num])){
+	if (fs::exists(fileManager.tmpPaths[tile.lane_num][tile.tile_num])){
 		// wait for writing to finish, just in case
 		// (don't have to unlock again, since mutex is destroyed after)
 		//writeLocks[lane_num][tile_num].lock();
@@ -480,11 +486,11 @@ void BCLReader::addSequenceBuffer(int lane_num, int tile_num){
 	//scanFilter(fs::path(s), tile_filter);
 
 	// Process current tile in each cycle directory.
-	for (unsigned i=0; i < cyclePaths[lane_num-1].size(); ++i){
-		std::string s(cyclePaths[lane_num-1][i].string() + tile_str + ".bcl");
+	for (int i=tile.first_tile; i < tile.last_tile; ++i){
+		std::string s(fileManager.cyclePaths[tile.lane_num-1][i].string() + tile_str + ".bcl");
 
 		// Add bases of tile in the current cycle to the buffered reads.
-		if (scanTile(tile_num, fs::path(s), runInfo, buffer) == false){
+		if (scanTile(tile.tile_num, fs::path(s), runInfo, buffer) == false){
 			_valid = false;
 		}
 	}
