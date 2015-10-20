@@ -39,7 +39,8 @@ private:
 	int length;
 	int step = 10;
 
-	bool end_reached;
+	// set to true initially, will be made false when we don't reach the end
+	bool end_reached = true;
 
 	bool valid = true;
 

@@ -102,12 +102,13 @@ namespace kraken {
 		while (target_cycle < length && fs::exists(cyclePaths[active_lane-1][target_cycle]))
 			target_cycle += 1;
 
-		end_reached = target_cycle == (length-1);
+		// end_reached will be set to true if all tiles have been read to the end
+		end_reached = end_reached && (target_cycle == length);
 
-		std::cout << active_tile << "  " << last_cycle+1 << "  " << target_cycle << "\n";
+		//std::cout << active_tile << "  " << last_cycle+1 << "  " << target_cycle << " " << length << " " << end_reached << "\n";
 
 		// return the [start,end] cycle indices as TileInfo, with tile and lane
-		TileInfo ret = {active_lane, active_tile, last_cycle+1, target_cycle};
+		TileInfo ret = {active_lane, active_tile, last_cycle, target_cycle};
 
 		active_tile = getNextTile(active_tile);
 

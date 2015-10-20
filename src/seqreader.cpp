@@ -411,47 +411,22 @@ bool BCLReader::is_valid() {
 // Each call of this function will advance the tile number. If all
 // If all tiles in a lane are processed, will continue with tile 1 of next lane.
 bool BCLReader::fillSequenceBuffer(){
-	// Set directory pointer to the next lane folder (L00..) if we
-	// have read all tiles in the current lane (i.e. reached tile 2316).
-	// 0 is a pseudo-tile name indicating that we have read all tiles.
-	/*if (tile_num == 0){
-		tile_num = 1101;
 
-		// If we don't have another lane directory, end scan.
-		if ((size_t)(lane_num-1 + 1) >= cyclePaths.size())
-			_valid = false;
-		else
-			lane_num++;
-	}*/
-
-	std::cout << "GET TILE SOON\n";
+	std::cout << "Filling sequence buffer.\n";
 
 	TileInfo tile = fileManager.getTile();
 
-	//std::cout << "AERNAERNE " << fileManager.is_valid() << "\n";
-
 	// If we are at the end.
-	if (!fileManager.is_valid())
+	if (!fileManager.is_valid()){
+		_valid = false;
 		return false;
-
-	std::cout << "GOTTEN TILE: " << tile.first_tile << " " << tile.last_tile << "\n";
+	}
 
 	// Start thread that reads the BCL tile file into a buffer.
 	std::thread sequenceReader(&BCLReader::addSequenceBuffer, this, tile);
 
 	// Tile processing thread runs independently, we will block later to wait.
 	sequenceReader.detach();
-
-
-	// Get the next tile number (processed in the next call of this function.)
-	//tile_num = getNextTile(tile_num);
-
-	// Check if the next tile exists. If not, end reading.
-	// XXX: Makes it abort when less than 96 tiles are found. Always intended?
-	//std::string tile_str(cyclePaths[lane_num-1][0].string() + "/s_" + std::to_string(lane_num) + "_" + std::to_string(tile_num) + ".bcl");
-	//if (tile_num != 0 && !fs::exists(fs::path(tile_str)))
-	//	_valid = false;
-	//return false;
 
 	return true;
 }
