@@ -88,15 +88,22 @@ namespace kraken {
 			active_tile = 1101;
 		}
 
-		assert(length==cyclePaths[0].size());
+		//assert(length==cyclePaths[0].size());
 
 		// check if the next 'step' cycles were generated for the active_tile
 		// otherwise we wait (blocks successive tiles too, but we read all together)
 		int last_cycle = lastTileCycle[active_tile];
 		int target_cycle = std::min(last_cycle + step, length-1);
 
-		while (!fs::exists(cyclePaths[active_lane-1][target_cycle]))
-			std::this_thread::sleep_for(std::chrono::minutes(5));
+		std::cout << active_lane-1 << " " << target_cycle << " " << cyclePaths[active_lane-1].size() << "\n";
+
+		//while (!fs::exists(cyclePaths[active_lane-1][target_cycle]))
+		//	std::this_thread::sleep_for(std::chrono::minutes(5));
+
+		while (!fs::exists(cyclePaths[active_lane-1][target_cycle])){
+					std::this_thread::sleep_for(std::chrono::seconds(5));
+					std::cout << "\rWaiting for next tile..";
+		}
 
 		// add cycles that exist beyond our target cycle
 		while (target_cycle < length && fs::exists(cyclePaths[active_lane-1][target_cycle]))
@@ -124,18 +131,27 @@ namespace kraken {
 
 		sort(lanePaths.begin(), lanePaths.end());
 
+
+
 		for (fs::path &path : lanePaths){
 			cyclePaths.push_back(std::vector<fs::path>());
-			copy_if(directory_iterator(path), directory_iterator(), back_inserter(cyclePaths.back()),
-					[&](const fs::path& p){
-						return (fs::is_directory(p) && p.filename().string()[0] == 'C');
-					}
-			);
+			//copy_if(directory_iterator(path), directory_iterator(), back_inserter(cyclePaths.back()),
+			//		[&](const fs::path& p){
+			//			return (fs::is_directory(p) && p.filename().string()[0] == 'C');
+			//		}
+			//);
+
+			for (int i=1; i <=length; ++i){
+				fs::path tmp(path);
+				tmp += ("/C" + std::to_string(i) + ".1");
+				cyclePaths.back().push_back(tmp);
+			}
+
 
 			// sort cycle paths by keys C1.1, C2.1,...,Cl.1..
-			sort(cyclePaths.back().begin(), cyclePaths.back().end(), cyclePathCompare);
+			//sort(cyclePaths.back().begin(), cyclePaths.back().end(), cyclePathCompare);
 			// write to standard output
-			copy(cyclePaths.back().begin(), cyclePaths.back().end(), std::ostream_iterator<fs::path>(std::cout, "\n"));
+			//copy(cyclePaths.back().begin(), cyclePaths.back().end(), std::ostream_iterator<fs::path>(std::cout, "\n"));
 		}
 
 		std::cout << "Found " << lanePaths.size() << " lane directories.\n";

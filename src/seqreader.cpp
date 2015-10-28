@@ -416,6 +416,8 @@ bool BCLReader::fillSequenceBuffer(){
 
 	TileInfo tile = fileManager.getTile();
 
+	std::cout << tile.first_tile << " " << tile.last_tile << std::endl;
+
 	// If we are at the end.
 	if (!fileManager.is_valid()){
 		_valid = false;
