@@ -61,6 +61,8 @@ namespace kraken {
 
 		// Scan target directory and get all paths for each of the lane folders.
 		this->getFilePaths();
+		for (int i=1; i <=lanePaths.size(); ++i)
+			active_lanes.push(i);
 	}
 
 	bool BCLFileManager::is_valid(){
@@ -78,44 +80,61 @@ namespace kraken {
 		if (active_tile == 0){
 			std::cout << "END: " << end_reached << "\n";
 
-			// check if we reached the last cycle of the last tile -> end
-			if (end_reached){
+			// if we haven't reached the end in this lane, queue it again
+			if (!end_reached)
+				active_lanes.push(active_lane);
+
+			// reset tile to start and go to next lane
+			active_tile = 1101;
+			active_lane = active_lanes.front();
+			active_lanes.pop();
+			end_reached = true;
+
+			// if no lanes are left to process, end
+			if (active_lanes.empty()){
 				valid = false;
 				return TileInfo();
 			}
 
-			// if not, go to the first tile and wait do remaining cycles
-			active_tile = 1101;
 		}
 
 		//assert(length==cyclePaths[0].size());
 
-		// check if the next 'step' cycles were generated for the active_tile
+		// check if the next 'step' number of cycles were generated for the active_tile
 		// otherwise we wait (blocks successive tiles too, but we read all together)
 		int last_cycle = lastTileCycle[active_tile];
 		int target_cycle = std::min(last_cycle + step, length-1);
 
-		std::cout << active_lane-1 << " " << target_cycle << " " << cyclePaths[active_lane-1].size() << "\n";
-
-		//while (!fs::exists(cyclePaths[active_lane-1][target_cycle]))
-		//	std::this_thread::sleep_for(std::chrono::minutes(5));
-
 		while (!fs::exists(cyclePaths[active_lane-1][target_cycle])){
-					std::this_thread::sleep_for(std::chrono::seconds(5));
-					std::cout << "\rWaiting for next tile..";
+			std::this_thread::sleep_for(std::chrono::seconds(5));
 		}
 
+		std::cout << active_lane-1 << " " << target_cycle << " " << cyclePaths[active_lane-1].size() << "\n";
+
+		std::cout << "Target found: " << target_cycle << "\n";
+
 		// add cycles that exist beyond our target cycle
-		while (target_cycle < length && fs::exists(cyclePaths[active_lane-1][target_cycle]))
-			target_cycle += 1;
+		//while (target_cycle < length && fs::exists(cyclePaths[active_lane-1][target_cycle]))
+		//	target_cycle += 1;
+
+		//std::cout << "Target extended: " << target_cycle << "\n";
 
 		// end_reached will be set to true if all tiles have been read to the end
-		end_reached = end_reached && (target_cycle == length);
+		bool end_cycle = target_cycle == length-1;
+		end_reached = end_reached && end_cycle;
 
-		//std::cout << active_tile << "  " << last_cycle+1 << "  " << target_cycle << " " << length << " " << end_reached << "\n";
+		// workaround because seqreader checks < target_cycle. TODO: FIX
+		if (end_cycle)
+			target_cycle++;
 
 		// return the [start,end] cycle indices as TileInfo, with tile and lane
 		TileInfo ret = {active_lane, active_tile, last_cycle, target_cycle};
+
+		// remember tile progress for next iteration
+		lastTileCycle[active_tile] = target_cycle;
+
+		std::cout << "wtof\n";
+
 
 		active_tile = getNextTile(active_tile);
 
@@ -130,8 +149,6 @@ namespace kraken {
 		);
 
 		sort(lanePaths.begin(), lanePaths.end());
-
-
 
 		for (fs::path &path : lanePaths){
 			cyclePaths.push_back(std::vector<fs::path>());
@@ -165,6 +182,9 @@ namespace kraken {
 			do{
 				std::string s(lanePaths[i].string() + "/" + std::to_string(j) + ".filter");
 				tmpPaths[i+1][j] = path(s);
+				if (fs::exists(tmpPaths[i+1][j]))
+					fs::remove(tmpPaths[i+1][j]);
+
 				//std::cout << tmpPaths[i+1][j].string() << "\n";
 			} while( (j = getNextTile(j)) );
 		}

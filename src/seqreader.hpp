@@ -28,6 +28,7 @@
 #include <boost/serialization/vector.hpp>
 #include <boost/archive/binary_oarchive.hpp>
 #include <boost/archive/binary_iarchive.hpp>
+#include <boost/serialization/shared_ptr.hpp>
 
 
 
@@ -178,6 +179,7 @@ private:
 	bool fillSequenceBuffer();
 	void addSequenceBuffer(TileInfo tile);
 	void saveRunInfo();
+	void readInfo(std::shared_ptr<RunInfoContainer> runInfoContainer);
 	void writeInfo(std::shared_ptr<RunInfoContainer> runInfoContainer);
 
 	// Utility functions

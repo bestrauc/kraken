@@ -47,6 +47,7 @@
 #include <sysexits.h>
 #include <unistd.h>
 #include <vector>
+#include <queue>
 #include <algorithm>
 #include <iostream>
 #include <memory>

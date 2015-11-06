@@ -220,10 +220,15 @@ bool scanTile(int tile_num, const fs::path &tile_path,
 
 	buffer->resize(N);
 
+	bool old_runinfo = true;
 	// If runInfo is not yet initialized, resize it and insert .
 	if (runInfo->runInfoList.size() != N){
+		std::cout << "NO RELOAD\n";
 		runInfo->runInfoList.resize(N);
+		old_runinfo = false;
 	}
+	else
+		std::cout << "RELOAD\n";
 
 	// Variables for timing measurement. (On one line to comment it out easily.)
 	uint64_t t1=0, t2=0, read_time=0, process_time=0;
@@ -265,7 +270,8 @@ bool scanTile(int tile_num, const fs::path &tile_path,
 				tmp << tile_num << "_" << (pos+i);
 				buffer->at(rev_index).id = tmp.str();
 				buffer->at(rev_index).runContainer = runInfo;
-				runInfo->runInfoList.at(rev_index) = std::make_shared<SeqClassifyInfo>();
+				if (!old_runinfo)
+					runInfo->runInfoList.at(rev_index) = std::make_shared<SeqClassifyInfo>();
 				buffer->at(rev_index).readInfo 	= runInfo->runInfoList.at(rev_index);
 			}
 
@@ -363,9 +369,9 @@ DNASequence BCLReader::next_sequence() {
 		// spawn a writer thread for temp information, if such information exists
 		// TODO: Ensure that writing only is done when nothing is being read (to improve IO performance)
 		// TODO: Refactor start of writer thread into own function.
-		//if (sequenceBuffer != nullptr && sequenceBuffer->empty()){
-		//	saveRunInfo();
-		//}
+		if (sequenceBuffer != nullptr && sequenceBuffer->empty()){
+			saveRunInfo();
+		}
 
 #ifdef DEBUG
 		if (concurrentBufferQueue.empty())
@@ -416,8 +422,6 @@ bool BCLReader::fillSequenceBuffer(){
 
 	TileInfo tile = fileManager.getTile();
 
-	std::cout << tile.first_tile << " " << tile.last_tile << std::endl;
-
 	// If we are at the end.
 	if (!fileManager.is_valid()){
 		_valid = false;
@@ -453,7 +457,9 @@ void BCLReader::addSequenceBuffer(TileInfo tile){
 	if (fs::exists(fileManager.tmpPaths[tile.lane_num][tile.tile_num])){
 		// wait for writing to finish, just in case
 		// (don't have to unlock again, since mutex is destroyed after)
-		//writeLocks[lane_num][tile_num].lock();
+		std::cout << "Locking reader\n";
+		writeLocks[tile.lane_num][tile.tile_num].lock();
+		readInfo(runInfo);
 		// put reading here
 	}
 
@@ -463,8 +469,9 @@ void BCLReader::addSequenceBuffer(TileInfo tile){
 	//scanFilter(fs::path(s), tile_filter);
 
 	// Process current tile in each cycle directory.
-	for (int i=tile.first_tile; i < tile.last_tile; ++i){
+	for (int i=tile.first_cycle; i < tile.last_cycle; ++i){
 		std::string s(fileManager.cyclePaths[tile.lane_num-1][i].string() + tile_str + ".bcl");
+		std::cout << s << "\n";
 
 		// Add bases of tile in the current cycle to the buffered reads.
 		if (scanTile(tile.tile_num, fs::path(s), runInfo, buffer) == false){
@@ -489,21 +496,47 @@ void BCLReader::saveRunInfo(){
 	RunInfoWriter.detach();
 }
 
+void BCLReader::readInfo(std::shared_ptr<RunInfoContainer> runInfoContainer){
+		std::ifstream ifs(fileManager.tmpPaths[runInfoContainer->lane_num][runInfoContainer->tile_num].string());
+
+	    {
+			// TODO: make a compression archive
+			// e.g.: http://stackoverflow.com/questions/4961155/boostiostream-zlib-compressing-multiple-files-into-one-archive
+	        boost::archive::binary_iarchive ia(ifs);
+	        ia >> runInfoContainer->runInfoList;
+
+	        //for (TRunInfoList::iterator it = runInfoContainer->runInfoList.begin();
+	        //		it != runInfoContainer->runInfoList.end(); ++it){
+	        //	std::shared_ptr<SeqClassifyInfo> tmp = std::make_shared<SeqClassifyInfo>();
+	        //	ia >> *tmp;
+
+	        //	runInfoContainer->runInfoList.push_back(tmp);
+	        //}
+	    }
+
+	    // Note: We don't have to release processing_lock again since writeRunInfo is destroyed.
+	    // Release the writeLock to indicate that writing is finished.
+	    writeLocks[runInfoContainer->lane_num][runInfoContainer->tile_num].unlock();
+}
+
 void BCLReader::writeInfo(std::shared_ptr<RunInfoContainer> runInfoContainer){
-	std::ofstream ofs(tmpPaths[runInfoContainer->lane_num][runInfoContainer->tile_num].string());
+		std::ofstream ofs(fileManager.tmpPaths[runInfoContainer->lane_num][runInfoContainer->tile_num].string());
 
 		// wait for the runInfoList
 		std::cout << std::this_thread::get_id() << " - Waiting for the release of the write lock...\n";
 		runInfoContainer->processing_lock.lock();
 		std::cout << std::this_thread::get_id() << " - Obtained the write lock...\n";
+
+		std::cout << runInfoContainer->lane_num << " " << runInfoContainer->tile_num <<  " " << fileManager.tmpPaths[runInfoContainer->lane_num][runInfoContainer->tile_num].string() << "\n";
 	    {
 			// TODO: make a compression archive
 			// e.g.: http://stackoverflow.com/questions/4961155/boostiostream-zlib-compressing-multiple-files-into-one-archive
 	        boost::archive::binary_oarchive oa(ofs);
-	        for (TRunInfoList::iterator it = runInfoContainer->runInfoList.begin();
-	        		it != runInfoContainer->runInfoList.end(); ++it){
-	        	oa << *(*it);
-	        }
+	        oa << runInfoContainer->runInfoList;
+	        //for (TRunInfoList::iterator it = runInfoContainer->runInfoList.begin();
+	        //		it != runInfoContainer->runInfoList.end(); ++it){
+	        //	oa << *(*it);
+	        //}
 	    }
 
 	    // Note: We don't have to release processing_lock again since writeRunInfo is destroyed.

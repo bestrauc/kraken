@@ -12,8 +12,8 @@ struct TileInfo{
 	//std::vector<path> tile_paths;
 	int lane_num;
 	int tile_num;
-	int first_tile; // first tile to process
-	int last_tile;  // last valid tile available
+	int first_cycle; // first cycle to process
+	int last_cycle;  // last valid cycle available
 };
 
 class BCLFileManager {
@@ -30,6 +30,7 @@ public:
 
 	// remember the last cycle we processed the tile in
 	std::unordered_map<int, int> lastTileCycle;
+	std::queue<int> active_lanes;
 private:
 
 	path basecalls_path;
@@ -43,7 +44,6 @@ private:
 	bool end_reached = true;
 
 	bool valid = true;
-
 
 	void getFilePaths();
 
