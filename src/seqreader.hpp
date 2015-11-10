@@ -47,6 +47,8 @@ typedef struct{
 
 	uint32_t hits = 0;  // only maintained if in quick mode
 	uint32_t taxon = 0;
+	uint64_t last_kmer = 0;
+	bool first = true;
 
 	template<class Archive>
 	void serialize(Archive &ar, const unsigned int version){
@@ -92,13 +94,6 @@ struct DNASequence{
 	// only used for BCL reader, otherwise null
 	std::shared_ptr<SeqClassifyInfo> readInfo;
 	std::shared_ptr<RunInfoContainer> runContainer;
-
-	/*DNASequence() = default;
-	DNASequence(DNASequence&&) = default;
-	DNASequence& operator=(DNASequence&&) = default;
-	DNASequence(const DNASequence&) = delete;
-	DNASequence& operator=(const DNASequence&) = delete;
-    ~DNASequence() = default;*/
 };
 
 

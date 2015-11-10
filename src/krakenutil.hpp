@@ -41,7 +41,8 @@ namespace kraken {
   class KmerScanner {
     public:
 
-    KmerScanner(std::string &seq, size_t start=0, size_t finish=~0);
+    //KmerScanner(std::string &seq, size_t start=0, size_t finish=~0);
+    KmerScanner(std::string &seq, size_t start=0, size_t finish=~0, bool extend=0, uint64_t last_kmer=0);
     uint64_t *next_kmer();  // NULL when seq exhausted
     bool ambig_kmer();  // does last returned kmer have non-ACGT?
 

@@ -257,7 +257,7 @@ void incremental_classify_sequence(DNASequence &dna) {
 	int64_t current_max_pos = 0;
 
 	if (dna.seq.size() >= Database.get_k()) {
-		KmerScanner scanner(dna.seq);
+		KmerScanner scanner(dna.seq, 0, ~0, dna.readInfo->first, dna.readInfo->last_kmer);
 		while ((kmer_ptr = scanner.next_kmer()) != NULL) {
 			dna.readInfo->taxon = 0;
 			if (scanner.ambig_kmer()) {
@@ -280,8 +280,11 @@ void incremental_classify_sequence(DNASequence &dna) {
 				}
 			}
 
+			dna.readInfo->last_kmer = *kmer_ptr;;
 			dna.readInfo->taxa.push_back(dna.readInfo->taxon);
 		}
+
+		dna.readInfo->first = false;
 	}
 }
 

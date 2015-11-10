@@ -164,7 +164,7 @@ uint64_t KmerScanner::kmer_mask = 0;
 uint32_t KmerScanner::mini_kmer_mask = 0;
 
 // Create a scanner for the string over the interval [start, finish)
-KmerScanner::KmerScanner(string &seq, size_t start, size_t finish) {
+/*KmerScanner::KmerScanner(string &seq, size_t start, size_t finish) {
 	if (! k)
 		errx(EX_SOFTWARE, "KmerScanner created w/o setting k");
 	if (finish > seq.size())
@@ -177,6 +177,26 @@ KmerScanner::KmerScanner(string &seq, size_t start, size_t finish) {
 	pos1 = start;
 	pos2 = finish;
 	loaded_nt = 0;
+	if (pos2 - pos1 + 1 < k)
+		curr_pos = pos2;
+}*/
+
+// Create a scanner for the string over the interval [start, finish)
+// extend existing kmer
+KmerScanner::KmerScanner(string &seq, size_t start, size_t finish, bool extend, uint64_t last_kmer) {
+	if (! k)
+		errx(EX_SOFTWARE, "KmerScanner created w/o setting k");
+	if (finish > seq.size())
+		finish = seq.size();
+
+	kmer = last_kmer;
+	ambig = 0;
+	str = &seq;
+	curr_pos = start;
+	pos1 = start;
+	pos2 = finish;
+	if (extend)
+		loaded_nt = k;
 	if (pos2 - pos1 + 1 < k)
 		curr_pos = pos2;
 }
