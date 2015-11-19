@@ -225,9 +225,10 @@ void process_file(char *filename) {
 				//work_unit[j].readInfo.reset(new SeqClassifyInfo());
 				//std::cout << work_unit[j].readInfo << "\n\n";
 				incremental_classify_sequence(work_unit[j]);
-				//std::cout << "Finalize\n";
-				classify_finalize(work_unit[j], kraken_output_ss,
-						classified_output_ss, unclassified_output_ss);
+
+				if (work_unit[j].readInfo->pos == length)
+					classify_finalize(work_unit[j], kraken_output_ss,
+							classified_output_ss, unclassified_output_ss);
 				work_unit[j].runContainer->increment_count();
 			}
 

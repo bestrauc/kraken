@@ -45,6 +45,7 @@ typedef struct{
 	int64_t current_min_pos = 1;
 	int64_t current_max_pos = 0;*/
 
+	uint16_t pos = 0;
 	uint32_t hits = 0;  // only maintained if in quick mode
 	uint32_t taxon = 0;
 	uint64_t last_kmer = 0;
@@ -65,7 +66,8 @@ typedef std::vector<std::shared_ptr<SeqClassifyInfo> > TRunInfoList;
 struct RunInfoContainer{
 	TRunInfoList runInfoList;
 
-	RunInfoContainer(int count, int lane, int tile) : count(count), lane_num(lane), tile_num(tile) {
+	RunInfoContainer(int count, int lane, int tile, int processed) :
+		count(count), lane_num(lane), tile_num(tile), processed_nt(processed) {
 		processing_lock.lock(); // lock writing until all sequences have been read
 	};
 
@@ -74,6 +76,7 @@ struct RunInfoContainer{
 
 	int lane_num;
 	int tile_num;
+	int processed_nt = 0;
 
 	void increment_count(){
 		++count; // atomic increase
@@ -149,7 +152,7 @@ private:
 
 
 	// data structures indicating read status
-	std::unordered_map<int, std::vector<bool> > readsFinished;
+	//std::unordered_map<int, std::vector<bool> > readsFinished;
 	std::vector<bool> tileFinished;
 
 	// A list of progress for the reads of one tile

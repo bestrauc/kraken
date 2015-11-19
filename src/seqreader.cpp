@@ -199,7 +199,6 @@ bool scanFilter(const fs::path &filter_path, std::vector<bool> &tile_index){
 // Scan the tile given in the tile_path and save sequences into the buffer
 bool scanTile(int tile_num, const fs::path &tile_path,
 		std::shared_ptr<RunInfoContainer> &runInfo, std::unique_ptr<BCLReader::TDNABuffer> &buffer){
-
 	std::ifstream in_file;
 	in_file.open(tile_path.c_str(), std::ios::in | std::ios::binary);
 
@@ -278,6 +277,8 @@ bool scanTile(int tile_num, const fs::path &tile_path,
 			// Save the qualities into the read buffer.
 			buffer->at(rev_index).seq += baseChar;
 			buffer->at(rev_index).quals += qualChar;
+
+			runInfo->runInfoList.at(rev_index)-> pos = runInfo->processed_nt;
 
 			process_time += (GetTimeMs64() - t2);
 		}
@@ -444,7 +445,7 @@ void BCLReader::addSequenceBuffer(TileInfo tile){
 	// Create new buffer to hold the reads.
 	std::unique_ptr<TDNABuffer> buffer(new TDNABuffer());
 	// Create new buffer for the classification state.
-	std::shared_ptr<RunInfoContainer> runInfo(new RunInfoContainer(0, tile.lane_num, tile.tile_num));
+	std::shared_ptr<RunInfoContainer> runInfo(new RunInfoContainer(0, tile.lane_num, tile.tile_num, tile.last_cycle));
 
 	// create tile string for path construction
 	std::string tile_str("/s_" + std::to_string(tile.lane_num) + "_" + std::to_string(tile.tile_num));
