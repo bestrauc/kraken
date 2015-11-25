@@ -41,9 +41,9 @@ typedef struct{
 	std::vector<uint8_t> ambig_list;
 	std::unordered_map<uint32_t, uint32_t> hit_counts;
 
-	/*uint64_t current_bin_key;
+	uint64_t current_bin_key;
 	int64_t current_min_pos = 1;
-	int64_t current_max_pos = 0;*/
+	int64_t current_max_pos = 0;
 
 	uint16_t pos = 0;
 	uint32_t hits = 0;  // only maintained if in quick mode
@@ -136,8 +136,7 @@ public:
 	typedef std::unordered_map<int, path> TTilePathMap;
 
 	BCLReader(std::string filename);
-	BCLReader(std::string filename, int length);
-	//BCLReader(std::string filename, int length, std::vector<SeqClassifyInfo> *runInfoList);
+	BCLReader(std::string filename, int length, int max_tile);
 	DNASequence next_sequence();
 	bool is_valid();
 
@@ -152,11 +151,9 @@ private:
 
 
 	// data structures indicating read status
-	//std::unordered_map<int, std::vector<bool> > readsFinished;
 	std::vector<bool> tileFinished;
 
 	// A list of progress for the reads of one tile
-	//std::vector<std::unique_ptr<SeqClassifyInfo> > runInfoList;
 	std::unique_ptr<TDNABuffer> sequenceBuffer;
 
 	// Threading data
@@ -168,9 +165,6 @@ private:
 	Queue<std::shared_ptr<RunInfoContainer> > concurrentRunInfoQueue;
 
 	// Information about the state of the reader
-	//int tile_num;
-	//int lane_num;
-	int read_length;
 	bool valid,_valid;
 
 	// Private function definitions

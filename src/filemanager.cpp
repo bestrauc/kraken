@@ -46,9 +46,10 @@ bool cyclePathCompare(const fs::path &p1, const fs::path &p2){
 
 namespace kraken {
 
-	BCLFileManager::BCLFileManager(std::string basecalls_folder, int length){
+	BCLFileManager::BCLFileManager(std::string basecalls_folder, int length, int max_tile){
 		basecalls_path = fs::path(basecalls_folder);
 		this->length = length;
+		this->max_tile = max_tile;
 
 		if (!fs::exists(basecalls_path)){
 			err(EX_NOINPUT, "%s not found.", basecalls_folder.c_str());
@@ -98,8 +99,6 @@ namespace kraken {
 
 		}
 
-		//assert(length==cyclePaths[0].size());
-
 		// check if the next 'step' number of cycles were generated for the active_tile
 		// otherwise we wait (blocks successive tiles too, but we read all together)
 		int last_cycle = lastTileCycle[active_tile];
@@ -133,10 +132,11 @@ namespace kraken {
 		// remember tile progress for next iteration
 		lastTileCycle[active_tile] = target_cycle;
 
-		std::cout << "wtof\n";
-
-
-		active_tile = getNextTile(active_tile);
+		// end earlier if we reached the max tile number in this cycle
+		if (active_tile == max_tile)
+			active_tile = 0;
+		else
+			active_tile = getNextTile(active_tile);
 
 		return ret;
 	}
@@ -182,6 +182,8 @@ namespace kraken {
 			do{
 				std::string s(lanePaths[i].string() + "/" + std::to_string(j) + ".filter");
 				tmpPaths[i+1][j] = path(s);
+
+				// if temporary filter files exist already, delete them
 				if (fs::exists(tmpPaths[i+1][j]))
 					fs::remove(tmpPaths[i+1][j]);
 

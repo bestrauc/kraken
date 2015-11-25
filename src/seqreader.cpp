@@ -337,12 +337,12 @@ void BCLReader::init(string filename){
 
 
 BCLReader::BCLReader(string file_name)
-: fileManager(file_name, 0), read_length(-1) {
+: fileManager(file_name, 0, 2316) {
 	this->init(file_name);
 }
 
-BCLReader::BCLReader(string file_name, int length)
-: fileManager(file_name, length), read_length(length) {
+BCLReader::BCLReader(string file_name, int length, int max_tile)
+: fileManager(file_name, length, max_tile) {
 	this->init(file_name);
 }
 

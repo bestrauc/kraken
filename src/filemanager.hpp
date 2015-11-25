@@ -18,7 +18,7 @@ struct TileInfo{
 
 class BCLFileManager {
 public:
-	BCLFileManager(std::string basecalls_folder, int length);
+	BCLFileManager(std::string basecalls_folder, int length, int max_tile);
 	TileInfo getTile();
 
 	bool is_valid();
@@ -38,6 +38,7 @@ private:
 	int active_tile = 1101;
 	int active_lane = 1;
 	int length;
+	int max_tile;
 	int step = 10;
 
 	// set to true initially, will be made false when we don't reach the end

@@ -51,6 +51,7 @@ enum Input_mode {FASTQ, FASTA, BCL};
 Input_mode File_input = FASTA;
 
 size_t length = -1;
+int max_tile = 2316;
 // ------------------------
 
 bool Print_classified = false;
@@ -185,7 +186,7 @@ void process_file(char *filename) {
 	else if (File_input == FASTA)
 		reader = new FastaReader(file_str);
 	else
-		reader = new BCLReader(file_str, length);
+		reader = new BCLReader(file_str, length, max_tile);
 
 	uint64_t read_time=0, process_time=0;
 
@@ -226,9 +227,11 @@ void process_file(char *filename) {
 				//std::cout << work_unit[j].readInfo << "\n\n";
 				incremental_classify_sequence(work_unit[j]);
 
-				if (work_unit[j].readInfo->pos == length)
+				if (work_unit[j].readInfo->pos == length){
+					//std::cout << "Time to finalize " << work_unit[j].readInfo->pos << "!\n";
 					classify_finalize(work_unit[j], kraken_output_ss,
 							classified_output_ss, unclassified_output_ss);
+				}
 				work_unit[j].runContainer->increment_count();
 			}
 
@@ -253,9 +256,9 @@ void process_file(char *filename) {
 void incremental_classify_sequence(DNASequence &dna) {
 	uint64_t *kmer_ptr;
 
-	uint64_t current_bin_key;
-	int64_t current_min_pos = 1;
-	int64_t current_max_pos = 0;
+	//uint64_t current_bin_key;
+	//int64_t current_min_pos = 1;
+	//int64_t current_max_pos = 0;
 
 	if (dna.seq.size() >= Database.get_k()) {
 		KmerScanner scanner(dna.seq, 0, ~0, dna.readInfo->first, dna.readInfo->last_kmer);
@@ -268,10 +271,10 @@ void incremental_classify_sequence(DNASequence &dna) {
 				dna.readInfo->ambig_list.push_back(0);
 				uint32_t *val_ptr = Database.kmer_query(
 						Database.canonical_representation(*kmer_ptr),
-						//&dna.readInfo->current_bin_key,
-						//&dna.readInfo->current_min_pos, &dna.readInfo->current_max_pos
-						&current_bin_key,
-						&current_min_pos, &current_max_pos
+						&dna.readInfo->current_bin_key,
+						&dna.readInfo->current_min_pos, &dna.readInfo->current_max_pos
+						//&current_bin_key,
+						//&current_min_pos, &current_max_pos
 				);
 				dna.readInfo->taxon = val_ptr ? *val_ptr : 0;
 				if (dna.readInfo->taxon) {
@@ -490,7 +493,7 @@ void parse_command_line(int argc, char **argv) {
 
 	if (argc > 1 && strcmp(argv[1], "-h") == 0)
 		usage(0);
-	while ((opt = getopt(argc, argv, "d:i:t:u:n:m:o:qfbC:U:Ml:")) != -1) {
+	while ((opt = getopt(argc, argv, "d:i:t:u:n:m:o:qfbC:U:Ml:x:")) != -1) {
 		switch (opt) {
 		case 'd' :
 			DB_filename = optarg;
@@ -556,6 +559,9 @@ void parse_command_line(int argc, char **argv) {
 		case 'l' :					//
 			length = atoi(optarg);	//
 			break;					//
+		case 'x' :					//
+			max_tile = atoi(optarg);//
+			break;					//
 		default:
 			usage();
 			break;
@@ -593,7 +599,8 @@ void usage(int exit_code) {
 			<< "  -m #             Minimum hit count (ignored w/o -q)" << endl
 			<< "  -C filename      Print classified sequences" << endl
 			<< "  -U filename      Print unclassified sequences" << endl
-			<< "  -l length        Length of reads (only relevant for BCL)" << endl
+			<< "  -l length        Length of reads (BCL mode)" << endl
+			<< "  -x max_tile      Maximum tile number (BCL mode, e.g. 1116)" << endl
 			<< "  -f               Input is in FASTQ format" << endl
 			<< "  -b               Input is in BCL format" << endl
 			<< "  -c               Only include classified reads in output" << endl
