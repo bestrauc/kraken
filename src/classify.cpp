@@ -189,6 +189,7 @@ void process_file(char *filename) {
 		reader = new BCLReader(file_str, length, max_tile);
 
 	uint64_t read_time=0, process_time=0;
+	uint64_t total = 0;
 
 	#pragma omp parallel reduction(+:read_time, process_time)
 	{
@@ -217,6 +218,8 @@ void process_file(char *filename) {
 			classified_output_ss.str("");
 			unclassified_output_ss.str("");
 
+			//std::cout << work_unit.size() << " UNITSIZE" << reader->is_valid() << "\n";
+
 			for (size_t j = 0; j < work_unit.size(); j++){
 				/*classify_sequence(work_unit[j], kraken_output_ss,
 						classified_output_ss, unclassified_output_ss);*/
@@ -226,12 +229,15 @@ void process_file(char *filename) {
 				//work_unit[j].readInfo.reset(new SeqClassifyInfo());
 				//std::cout << work_unit[j].readInfo << "\n\n";
 				incremental_classify_sequence(work_unit[j]);
+				//std::cout << work_unit[j].readInfo->first << "\n";
+				//std::cout << ++total << "TOTAL \n";
 
 				if (work_unit[j].readInfo->pos == length){
 					//std::cout << "Time to finalize " << work_unit[j].readInfo->pos << "!\n";
 					classify_finalize(work_unit[j], kraken_output_ss,
 							classified_output_ss, unclassified_output_ss);
 				}
+
 				work_unit[j].runContainer->increment_count();
 			}
 
@@ -260,9 +266,14 @@ void incremental_classify_sequence(DNASequence &dna) {
 	//int64_t current_min_pos = 1;
 	//int64_t current_max_pos = 0;
 
+	//std::cout << dna.seq.size() << " " << (int)Database.get_k() << "\n";
+
 	if (dna.seq.size() >= Database.get_k()) {
-		KmerScanner scanner(dna.seq, 0, ~0, dna.readInfo->first, dna.readInfo->last_kmer);
+		//std::cout << dna.seq << " TRUE \n";
+		KmerScanner scanner(dna.seq, 0, ~0, !dna.readInfo->first, dna.readInfo->last_kmer);
+		int c_i=0;
 		while ((kmer_ptr = scanner.next_kmer()) != NULL) {
+			//std::cout << "While " << ++c_i << " " << dna.readInfo->first << " " << dna.readInfo->last_kmer << " " << dna.seq << "\n";
 			dna.readInfo->taxon = 0;
 			if (scanner.ambig_kmer()) {
 				dna.readInfo->ambig_list.push_back(1);
