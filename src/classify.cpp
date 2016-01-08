@@ -218,27 +218,32 @@ void process_file(char *filename) {
 			classified_output_ss.str("");
 			unclassified_output_ss.str("");
 
-			//std::cout << work_unit.size() << " UNITSIZE" << reader->is_valid() << "\n";
+			uint64_t seq_count=work_unit.size();
+			std::cout << seq_count << " seqs\n";
 
 			for (size_t j = 0; j < work_unit.size(); j++){
-				/*classify_sequence(work_unit[j], kraken_output_ss,
-						classified_output_ss, unclassified_output_ss);*/
-				//std::cout << "Classify\n";
-				//std::cout << work_unit[j].readInfo << "\n";
-				//work_unit[j].readInfo = std::make_shared<SeqClassifyInfo>();
-				//work_unit[j].readInfo.reset(new SeqClassifyInfo());
-				//std::cout << work_unit[j].readInfo << "\n\n";
-				incremental_classify_sequence(work_unit[j]);
-				//std::cout << work_unit[j].readInfo->first << "\n";
-				//std::cout << ++total << "TOTAL \n";
-
-				if (work_unit[j].readInfo->pos == length){
-					//std::cout << "Time to finalize " << work_unit[j].readInfo->pos << "!\n";
-					classify_finalize(work_unit[j], kraken_output_ss,
-							classified_output_ss, unclassified_output_ss);
+				if (File_input != BCL){
+					classify_sequence(work_unit[j], kraken_output_ss,
+						classified_output_ss, unclassified_output_ss);
 				}
+				else {
+					incremental_classify_sequence(work_unit[j]);
+					//std::cout << work_unit[j].readInfo->first << "\n";
+					//std::cout << ++total << "TOTAL \n";
 
-				work_unit[j].runContainer->increment_count();
+					//std::cout << work_unit[j].seq << "\n";
+
+					if (work_unit[j].readInfo->pos == length){
+						//std::cout << "Time to finalize " << work_unit[j].readInfo->pos << "!\n";
+						classify_finalize(work_unit[j], kraken_output_ss,
+								classified_output_ss, unclassified_output_ss);
+					}
+					else{
+						std::cout << --seq_count << "\n";
+					}
+
+					work_unit[j].runContainer->increment_count();
+				}
 			}
 
 			#pragma omp critical(write_output)
@@ -249,7 +254,7 @@ void process_file(char *filename) {
 					(*Classified_output) << classified_output_ss.str();
 				if (Print_unclassified)
 					(*Unclassified_output) << unclassified_output_ss.str();
-				total_sequences += work_unit.size();
+				total_sequences += seq_count;
 				total_bases += total_nt;
 			}
 		}

@@ -195,10 +195,11 @@ KmerScanner::KmerScanner(string &seq, size_t start, size_t finish, bool extend, 
 	curr_pos = start;
 	pos1 = start;
 	pos2 = finish;
-	if (extend)
-		loaded_nt = k;
+	loaded_nt = extend ? k : 0;
 	if (pos2 - pos1 + 1 < k)
 		curr_pos = pos2;
+
+	//std::cout << seq << " " << pos1 << " " << curr_pos << " " << loaded_nt << " " << pos2 << "\n";
 }
 
 uint8_t KmerScanner::get_k() { return k; }
@@ -214,8 +215,10 @@ void KmerScanner::set_k(uint8_t n) {
 }
 
 uint64_t *KmerScanner::next_kmer() {
-	if (curr_pos >= pos2)
+	if (curr_pos >= pos2){
+		//std::cout << "Returning NULL - wut\n";
 		return NULL;
+	}
 	if (loaded_nt)
 		loaded_nt--;
 	while (loaded_nt < k) {
@@ -241,6 +244,8 @@ uint64_t *KmerScanner::next_kmer() {
 		kmer &= kmer_mask;
 		ambig &= mini_kmer_mask;
 	}
+
+	//std::cout << kmer << "\n";
 	return &kmer;
 }
 

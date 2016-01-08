@@ -108,7 +108,7 @@ namespace kraken {
 			std::this_thread::sleep_for(std::chrono::seconds(5));
 		}
 
-		std::cout << active_lane-1 << " " << target_cycle << " " << cyclePaths[active_lane-1].size() << "\n";
+		std::cout << active_lane-1 << " " << last_cycle << " " << target_cycle << " " << cyclePaths[active_lane-1].size() << "\n";
 
 		std::cout << "Target found: " << target_cycle << "\n";
 
@@ -152,23 +152,12 @@ namespace kraken {
 
 		for (fs::path &path : lanePaths){
 			cyclePaths.push_back(std::vector<fs::path>());
-			//copy_if(directory_iterator(path), directory_iterator(), back_inserter(cyclePaths.back()),
-			//		[&](const fs::path& p){
-			//			return (fs::is_directory(p) && p.filename().string()[0] == 'C');
-			//		}
-			//);
 
 			for (int i=1; i <=length; ++i){
 				fs::path tmp(path);
 				tmp += ("/C" + std::to_string(i) + ".1");
 				cyclePaths.back().push_back(tmp);
 			}
-
-
-			// sort cycle paths by keys C1.1, C2.1,...,Cl.1..
-			//sort(cyclePaths.back().begin(), cyclePaths.back().end(), cyclePathCompare);
-			// write to standard output
-			//copy(cyclePaths.back().begin(), cyclePaths.back().end(), std::ostream_iterator<fs::path>(std::cout, "\n"));
 		}
 
 		std::cout << "Found " << lanePaths.size() << " lane directories.\n";

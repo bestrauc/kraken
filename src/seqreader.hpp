@@ -36,7 +36,7 @@ using namespace boost::filesystem;
 
 namespace kraken {
 
-typedef struct{
+struct SeqClassifyInfo{
 	std::vector<uint32_t> taxa;
 	std::vector<uint8_t> ambig_list;
 	std::unordered_map<uint32_t, uint32_t> hit_counts;
@@ -59,15 +59,16 @@ typedef struct{
 	    ar & hits;
 	    ar & taxon;
 	}
-} SeqClassifyInfo;
+};
 
 typedef std::vector<std::shared_ptr<SeqClassifyInfo> > TRunInfoList;
 
 struct RunInfoContainer{
-	TRunInfoList runInfoList;
+	//TRunInfoList runInfoList;
+	unsigned runsize;
 
-	RunInfoContainer(int count, int lane, int tile, int processed) :
-		count(count), lane_num(lane), tile_num(tile), processed_nt(processed) {
+	RunInfoContainer(int lane, int tile, int processed) :
+		count(0), lane_num(lane), tile_num(tile), processed_nt(processed) {
 		processing_lock.lock(); // lock writing until all sequences have been read
 	};
 
@@ -80,9 +81,10 @@ struct RunInfoContainer{
 
 	void increment_count(){
 		++count; // atomic increase
+		//std::cout << count << " " << runInfoList.size() << "\n";
 
 		// Release run information for writing when all information has been updated.
-		if (count == runInfoList.size())
+		if (count == runsize)
 			processing_lock.unlock();
 	}
 
@@ -135,7 +137,7 @@ public:
 	typedef std::vector<DNASequence> TDNABuffer;
 	typedef std::unordered_map<int, path> TTilePathMap;
 
-	BCLReader(std::string filename);
+	//BCLReader(std::string filename);
 	BCLReader(std::string filename, int length, int max_tile);
 	DNASequence next_sequence();
 	bool is_valid();
@@ -149,9 +151,11 @@ private:
 
 	BCLFileManager fileManager;
 
-
 	// data structures indicating read status
 	std::vector<bool> tileFinished;
+	std::unordered_map<int, std::unordered_map<int, std::shared_ptr<RunInfoContainer> > > runInfoMap;
+	std::unordered_map<int, std::unordered_map<int, TRunInfoList> > runMap;
+	//std::unordered_map<int, std::unordered_map<int, std::mutex> > runInfoLocks;
 
 	// A list of progress for the reads of one tile
 	std::unique_ptr<TDNABuffer> sequenceBuffer;
@@ -163,6 +167,7 @@ private:
 	// Concurrent queues for the threads
 	Queue<std::unique_ptr<TDNABuffer> > concurrentBufferQueue;
 	Queue<std::shared_ptr<RunInfoContainer> > concurrentRunInfoQueue;
+	//std::thread writerThread;
 
 	// Information about the state of the reader
 	bool valid,_valid;
