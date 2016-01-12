@@ -237,7 +237,7 @@ void process_file(char *filename) {
 						//std::cout << "Time to finalize " << work_unit[j].readInfo->pos << "!\n";
 						classify_finalize(work_unit[j], kraken_output_ss,
 								classified_output_ss, unclassified_output_ss);
-						std::cout << ++total << "TOTAL \n";
+						//std::cout << ++total << "TOTAL \n";
 					}
 					else{
 						//std::cout << --seq_count << "\n";

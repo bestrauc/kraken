@@ -67,6 +67,9 @@ struct RunInfoContainer{
 	//TRunInfoList runInfoList;
 	unsigned runsize;
 
+	RunInfoContainer() :
+			count(0), lane_num(0), tile_num(0), processed_nt(0) {	};
+
 	RunInfoContainer(int lane, int tile, int processed) :
 		count(0), lane_num(lane), tile_num(tile), processed_nt(processed) {
 		processing_lock.lock(); // lock writing until all sequences have been read
