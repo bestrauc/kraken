@@ -324,7 +324,7 @@ int getNextTile(int tile){
 	}
 
 	return i1*1000+i2*100+i3;
-}
+}//
 
 //-----------------------------------------------------------
 //              BCL READER class
@@ -339,7 +339,7 @@ void BCLReader::init(string filename){
 	valid = _valid;
 
 	// start thread that waits to write temporary sequence info
-	//std::thread RunInfoWriter(&BCLReader::saveRunInfo, this);
+	//std::thread RunInfoWrite//r(&BCLReader::saveRunInfo, this);
 	//RunInfoWriter.detach();
 
 	//fileManager.cyclePaths.size()
@@ -401,11 +401,11 @@ DNASequence BCLReader::next_sequence() {
 		}
 	}
 
-	//dna = std::move(sequenceBuffer->back());
-	//sequenceBuffer->pop_back();
+	dna = std::move(sequenceBuffer->back());
+	sequenceBuffer->pop_back();
 
 	// deal with invalid sequences
-	{
+	/*{
 	// If the sequence is empty, it did not pass
 	// the quality filter and will be skipped.
 	do{
@@ -418,7 +418,7 @@ DNASequence BCLReader::next_sequence() {
 	// next_sequence to create a new buffer and search again.
 	if (sequenceBuffer->empty() && dna.seq.empty())
 		return this->next_sequence();
-	}
+	}/*
 
 	//std::cout << sequenceBuffer->size() << " - \n";
 
@@ -466,7 +466,7 @@ void BCLReader::addSequenceBuffer(TileInfo tile){
 	if (runInfoMap[tile.lane_num][tile.tile_num] == nullptr)
 		runInfoMap[tile.lane_num][tile.tile_num] = std::make_shared<RunInfoContainer>(tile.lane_num, tile.tile_num, tile.last_cycle);
 
-	std::cout << "Segfault " << runInfoMap[tile.lane_num][tile.tile_num] << "?\n";
+	//std::cout << "Segfault " << runInfoMap[tile.lane_num][tile.tile_num] << "?\n";
 
 	runInfoMap[tile.lane_num][tile.tile_num]->processing_lock.lock();
 	runInfoMap[tile.lane_num][tile.tile_num]->lane_num = tile.lane_num;
@@ -474,7 +474,7 @@ void BCLReader::addSequenceBuffer(TileInfo tile){
 	runInfoMap[tile.lane_num][tile.tile_num]->processed_nt = tile.last_cycle;
 	runInfoMap[tile.lane_num][tile.tile_num]->count = 0;
 
-	std::cout << "Segfault2?\n";
+	//std::cout << "Segfault2?\n";
 
 	// If we do not process the tile the first time, wait for the previous time to finish and update parameters
 	/*if (!runInfoMap[tile.lane_num].insert(std::make_pair(tile.tile_num, runInfo)).second){

@@ -219,7 +219,7 @@ void process_file(char *filename) {
 			unclassified_output_ss.str("");
 
 			uint64_t seq_count=work_unit.size();
-			std::cout << seq_count << " seqs\n";
+			//std::cout << seq_count << " seqs\n";
 
 			for (size_t j = 0; j < work_unit.size(); j++){
 				if (File_input != BCL){

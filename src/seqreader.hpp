@@ -72,7 +72,7 @@ struct RunInfoContainer{
 
 	RunInfoContainer(int lane, int tile, int processed) :
 		count(0), lane_num(lane), tile_num(tile), processed_nt(processed) {
-		processing_lock.lock(); // lock writing until all sequences have been read
+		//processing_lock.lock(); // lock writing until all sequences have been read
 	};
 
 	std::atomic_uint count;
