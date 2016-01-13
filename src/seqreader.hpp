@@ -29,6 +29,7 @@
 #include <boost/archive/binary_oarchive.hpp>
 #include <boost/archive/binary_iarchive.hpp>
 #include <boost/serialization/shared_ptr.hpp>
+#include <condition_variable>
 
 
 
@@ -166,6 +167,8 @@ private:
 	// Threading data
 	// ------------------------
 	std::unordered_map<int, std::unordered_map<int, std::mutex> > writeLocks;
+	std::condition_variable processing_var;
+	std::atomic_uint process_status;
 
 	// Concurrent queues for the threads
 	Queue<std::unique_ptr<TDNABuffer> > concurrentBufferQueue;

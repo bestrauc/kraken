@@ -205,8 +205,10 @@ void process_file(char *filename) {
 			{
 				while (total_nt < Work_unit_size) {
 					dna = reader->next_sequence();
-					if (! reader->is_valid())
+					if (! reader->is_valid() || dna.seq.empty()){
+						//std::cout << "leaving the collector\n";
 						break;
+					}
 					work_unit.push_back(dna);
 					total_nt += dna.seq.size();
 				}
@@ -240,7 +242,7 @@ void process_file(char *filename) {
 						//std::cout << ++total << "TOTAL \n";
 					}
 					else{
-						//std::cout << --seq_count << "\n";
+						--seq_count;
 					}
 
 					work_unit[j].runContainer->increment_count();
