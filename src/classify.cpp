@@ -230,9 +230,7 @@ void process_file(char *filename) {
 				}
 				else {
 					incremental_classify_sequence(work_unit[j]);
-					//std::cout << work_unit[j].readInfo->first << "\n";
 					//std::cout << ++total << "TOTAL \n";
-
 					//std::cout << work_unit[j].seq << "\n";
 
 					if (work_unit[j].readInfo->pos == length){
@@ -270,13 +268,15 @@ void process_file(char *filename) {
 void incremental_classify_sequence(DNASequence &dna) {
 	uint64_t *kmer_ptr;
 
-	//uint64_t current_bin_key;
-	//int64_t current_min_pos = 1;
-	//int64_t current_max_pos = 0;
+	uint64_t current_bin_key;
+	int64_t current_min_pos = 1;
+	int64_t current_max_pos = 0;
 
 	//std::cout << dna.seq.size() << " " << (int)Database.get_k() << "\n";
 
-	if (dna.seq.size() >= Database.get_k()) {
+	//dna.readInfo->
+
+	if (!dna.readInfo->first || dna.seq.size() >= Database.get_k()) {
 		//std::cout << dna.seq << " TRUE \n";
 		KmerScanner scanner(dna.seq, 0, ~0, !dna.readInfo->first, dna.readInfo->last_kmer);
 		int c_i=0;
@@ -285,17 +285,20 @@ void incremental_classify_sequence(DNASequence &dna) {
 			dna.readInfo->taxon = 0;
 			if (scanner.ambig_kmer()) {
 				dna.readInfo->ambig_list.push_back(1);
+				//std::cout << "a ";
 			}
 			else {
 				dna.readInfo->ambig_list.push_back(0);
 				uint32_t *val_ptr = Database.kmer_query(
 						Database.canonical_representation(*kmer_ptr),
-						&dna.readInfo->current_bin_key,
-						&dna.readInfo->current_min_pos, &dna.readInfo->current_max_pos
-						//&current_bin_key,
-						//&current_min_pos, &current_max_pos
+						//&dna.readInfo->current_bin_key,
+						//&dna.readInfo->current_min_pos, &dna.readInfo->current_max_pos
+						&current_bin_key,
+						&current_min_pos, &current_max_pos
 				);
+
 				dna.readInfo->taxon = val_ptr ? *val_ptr : 0;
+				//std::cout << dna.readInfo->taxon << " ";
 				if (dna.readInfo->taxon) {
 					dna.readInfo->hit_counts[dna.readInfo->taxon]++;
 					if (Quick_mode && ++dna.readInfo->hits >= Minimum_hit_count)
@@ -306,6 +309,8 @@ void incremental_classify_sequence(DNASequence &dna) {
 			dna.readInfo->last_kmer = *kmer_ptr;;
 			dna.readInfo->taxa.push_back(dna.readInfo->taxon);
 		}
+
+		//std::cout << "\n";
 
 		dna.readInfo->first = false;
 	}

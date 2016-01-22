@@ -284,6 +284,7 @@ bool scanTile(int tile_num, const fs::path &tile_path, TRunInfoList &runInfoList
 			// Save the qualities into the read buffer.
 			buffer->at(rev_index).seq += baseChar;
 			buffer->at(rev_index).quals += qualChar;
+			buffer->at(rev_index).readInfo->processed_len++;
 
 			process_time += (GetTimeMs64() - t2);
 		}

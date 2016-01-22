@@ -195,11 +195,15 @@ KmerScanner::KmerScanner(string &seq, size_t start, size_t finish, bool extend, 
 	curr_pos = start;
 	pos1 = start;
 	pos2 = finish;
-	loaded_nt = extend ? k : 0;
-	if (pos2 - pos1 + 1 < k)
-		curr_pos = pos2;
 
-	//std::cout << seq << " " << pos1 << " " << curr_pos << " " << loaded_nt << " " << pos2 << "\n";
+	loaded_nt = extend ? k : 0;
+
+	// disable this check if we process a continued sequence
+	if (pos2 - pos1 + 1 < k && !extend){
+		curr_pos = pos2;
+	}
+
+	//std::cout << seq << " " << start << " "  << finish << " " << pos1 << " " << curr_pos << " " << loaded_nt << " " << pos2 << "\n";
 }
 
 uint8_t KmerScanner::get_k() { return k; }

@@ -42,14 +42,15 @@ struct SeqClassifyInfo{
 	std::vector<uint8_t> ambig_list;
 	std::unordered_map<uint32_t, uint32_t> hit_counts;
 
-	uint64_t current_bin_key;
-	int64_t current_min_pos = 1;
-	int64_t current_max_pos = 0;
+	//uint64_t current_bin_key;
+	//int64_t current_min_pos = 1;
+	//int64_t current_max_pos = 0;
 
 	uint16_t pos = 0;
 	uint32_t hits = 0;  // only maintained if in quick mode
 	uint32_t taxon = 0;
 	uint64_t last_kmer = 0;
+	uint16_t processed_len = 0;
 	bool first = true;
 
 	template<class Archive>
