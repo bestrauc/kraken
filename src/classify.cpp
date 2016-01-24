@@ -121,21 +121,21 @@ int main(int argc, char **argv) {
 		if (Classified_output_file == "-")
 			Classified_output = &cout;
 		else
-			Classified_output = new ofstream(Classified_output_file.c_str());
+			Classified_output = new std::ofstream(Classified_output_file.c_str());
 	}
 
 	if (Print_unclassified) {
 		if (Unclassified_output_file == "-")
 			Unclassified_output = &cout;
 		else
-			Unclassified_output = new ofstream(Unclassified_output_file.c_str());
+			Unclassified_output = new std::ofstream(Unclassified_output_file.c_str());
 	}
 
 	if (! Kraken_output_file.empty()) {
 		if (Kraken_output_file == "-")
 			Print_kraken = false;
 		else
-			Kraken_output = new ofstream(Kraken_output_file.c_str());
+			Kraken_output = new std::ofstream(Kraken_output_file.c_str());
 	}
 	else
 		Kraken_output = &cout;
@@ -358,7 +358,8 @@ void classify_finalize(DNASequence &dna, ostringstream &koss,
 				return;
 			koss << "U\t";
 		}
-		koss << dna.id << "\t" << call << "\t" << dna.seq.size() << "\t";
+		//koss << dna.id << "\t" << call << "\t" << dna.seq.size() << "\t";
+		koss << dna.id << "\t" << call << "\t" << dna.readInfo->processed_len << "\t";
 
 		if (Quick_mode) {
 			koss << "Q:" << dna.readInfo->hits;

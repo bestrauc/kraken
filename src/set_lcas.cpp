@@ -63,7 +63,7 @@ int main(int argc, char **argv) {
   if (Operate_in_RAM) {
     db_file.close_file();
     temp_ptr = new char[ db_file_size ];
-    ifstream ifs(DB_filename.c_str(), ifstream::binary);
+    std::ifstream ifs(DB_filename.c_str(), std::ifstream::binary);
     ifs.read(temp_ptr, db_file_size);
     ifs.close();
     Database = KrakenDB(temp_ptr);
@@ -79,7 +79,7 @@ int main(int argc, char **argv) {
     process_files();
 
   if (Operate_in_RAM) {
-    ofstream ofs(DB_filename.c_str(), ofstream::binary);
+	std::ofstream ofs(DB_filename.c_str(), std::ofstream::binary);
     ofs.write(temp_ptr, db_file_size);
     ofs.close();
     delete temp_ptr;
@@ -89,8 +89,8 @@ int main(int argc, char **argv) {
 }
 
 void process_single_file() {
-  ifstream map_file(ID_to_taxon_map_filename.c_str());
-  if (map_file.rdstate() & ifstream::failbit) {
+  std::ifstream map_file(ID_to_taxon_map_filename.c_str());
+  if (map_file.rdstate() & std::ifstream::failbit) {
     err(EX_NOINPUT, "can't open %s", ID_to_taxon_map_filename.c_str());
   }
   string line;
@@ -127,8 +127,8 @@ void process_single_file() {
 }
 
 void process_files() {
-  ifstream map_file(File_to_taxon_map_filename.c_str());
-  if (map_file.rdstate() & ifstream::failbit) {
+  std::ifstream map_file(File_to_taxon_map_filename.c_str());
+  if (map_file.rdstate() & std::ifstream::failbit) {
     err(EX_NOINPUT, "can't open %s", File_to_taxon_map_filename.c_str());
   }
   string line;

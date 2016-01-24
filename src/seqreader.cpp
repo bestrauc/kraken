@@ -50,7 +50,7 @@ namespace fs = boost::filesystem;
 namespace kraken {
 FastaReader::FastaReader(string filename) {
 	file.open(filename.c_str());
-	if (file.rdstate() & ifstream::failbit) {
+	if (file.rdstate() & std::ifstream::failbit) {
 		err(EX_NOINPUT, "can't open %s", filename.c_str());
 	}
 	valid = true;
@@ -111,7 +111,7 @@ bool FastaReader::is_valid() {
 
 FastqReader::FastqReader(string filename) {
 	file.open(filename.c_str());
-	if (file.rdstate() & ifstream::failbit) {
+	if (file.rdstate() & std::ifstream::failbit) {
 		err(EX_NOINPUT, "can't open %s", filename.c_str());
 	}
 	valid = true;

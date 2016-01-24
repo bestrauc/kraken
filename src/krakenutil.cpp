@@ -28,8 +28,8 @@ map<uint32_t, uint32_t> build_parent_map(string filename) {
 	map<uint32_t, uint32_t> pmap;
 	uint32_t node_id, parent_id;
 	string line;
-	ifstream ifs(filename.c_str());
-	if (ifs.rdstate() & ifstream::failbit) {
+	std::ifstream ifs(filename.c_str());
+	if (ifs.rdstate() & std::ifstream::failbit) {
 		err(EX_NOINPUT, "error opening %s", filename.c_str());
 	}
 

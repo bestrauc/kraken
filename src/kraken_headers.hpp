@@ -47,9 +47,10 @@
 #include <sysexits.h>
 #include <unistd.h>
 #include <vector>
+
+// added headers
 #include <queue>
 #include <algorithm>
-#include <iostream>
 #include <memory>
 #include <iterator>
 #include <cassert>
