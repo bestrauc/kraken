@@ -326,6 +326,10 @@ void classify_finalize(DNASequence &dna, ostringstream &koss,
 		call = resolve_tree2(dna.readInfo->hit_counts, Parent_map);
 	}
 
+	//bool test =dna.id == "1101_5" && call;
+	//if (test)
+	//	std::cout << dna.id << " " << call << " " << total_classified << " CALL\n";
+
 	if (call)
 			#pragma omp atomic
 			total_classified++;
@@ -371,8 +375,7 @@ void classify_finalize(DNASequence &dna, ostringstream &koss,
 				koss << hitlist_string(dna.readInfo->taxa, dna.readInfo->ambig_list);
 		}
 
-		koss << endl;
-}
+		koss << endl;}
 
 void classify_sequence(DNASequence &dna, ostringstream &koss,
 		ostringstream &coss, ostringstream &uoss) {

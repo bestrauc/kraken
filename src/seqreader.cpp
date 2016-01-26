@@ -271,7 +271,7 @@ bool scanTile(int tile_num, const fs::path &tile_path, TRunInfoList &runInfoList
 			// If tile scanned first time, set id and runInfo.
 			if (buffer->at(rev_index).id.size()==0){
 				std::stringstream tmp;
-				tmp << tile_num << "_" << (pos+i);
+				tmp << tile_num << "_" << index;
 				buffer->at(rev_index).id = tmp.str();
 				buffer->at(rev_index).runContainer = runInfo;
 				if (!old_runinfo)
