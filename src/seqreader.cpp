@@ -462,6 +462,8 @@ bool BCLReader::is_valid() {
 // If all tiles in a lane are processed, will continue with tile 1 of next lane.
 bool BCLReader::fillSequenceBuffer(){
 
+	std::cout << "Manager?\n";
+
 	TileInfo tile = fileManager.getTile();
 
 	// If we are at the end.

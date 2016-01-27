@@ -104,7 +104,9 @@ namespace kraken {
 		int last_cycle = lastTileCycle[active_tile];
 		int target_cycle = std::min(last_cycle + step, length-1);
 
+		// what are we doing here
 		while (!fs::exists(cyclePaths[active_lane-1][target_cycle])){
+			std::cout << "wutwut\n";
 			std::this_thread::sleep_for(std::chrono::seconds(5));
 		}
 

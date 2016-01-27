@@ -146,6 +146,8 @@ int main(int argc, char **argv) {
 		process_file(argv[i]);
 	gettimeofday(&tv2, NULL);
 
+	Kraken_output->flush();
+
 	report_stats(tv1, tv2);
 
 	return 0;
@@ -258,6 +260,7 @@ void process_file(char *filename) {
 				total_sequences += seq_count;
 				total_bases += total_nt;
 			}
+
 		}
 
 	}  // end parallel section
@@ -277,7 +280,7 @@ void incremental_classify_sequence(DNASequence &dna) {
 	//dna.readInfo->
 
 	if (!dna.readInfo->first || dna.seq.size() >= Database.get_k()) {
-		//std::cout << dna.seq << " TRUE \n";
+		//	std::cout << dna.seq << " TRUE \n";
 		KmerScanner scanner(dna.seq, 0, ~0, !dna.readInfo->first, dna.readInfo->last_kmer);
 		int c_i=0;
 		while ((kmer_ptr = scanner.next_kmer()) != NULL) {
@@ -328,7 +331,7 @@ void classify_finalize(DNASequence &dna, ostringstream &koss,
 
 	//bool test =dna.id == "1101_5" && call;
 	//if (test)
-	//	std::cout << dna.id << " " << call << " " << total_classified << " CALL\n";
+	//std::cout << dna.id << " " << call << " " << total_classified << " CALL\n";
 
 	if (call)
 			#pragma omp atomic
@@ -360,10 +363,12 @@ void classify_finalize(DNASequence &dna, ostringstream &koss,
 		else {
 			if (Only_classified_kraken_output)
 				return;
+
 			koss << "U\t";
 		}
+
 		//koss << dna.id << "\t" << call << "\t" << dna.seq.size() << "\t";
-		koss << dna.id << "\t" << call << "\t" << dna.readInfo->processed_len << "\t";
+		koss << dna.id << "\t" << dna.seq << "\t" << call << "\t" << dna.readInfo->processed_len << "\t";
 
 		if (Quick_mode) {
 			koss << "Q:" << dna.readInfo->hits;
@@ -375,7 +380,8 @@ void classify_finalize(DNASequence &dna, ostringstream &koss,
 				koss << hitlist_string(dna.readInfo->taxa, dna.readInfo->ambig_list);
 		}
 
-		koss << endl;}
+		koss << endl;
+}
 
 void classify_sequence(DNASequence &dna, ostringstream &koss,
 		ostringstream &coss, ostringstream &uoss) {
@@ -453,6 +459,7 @@ void classify_sequence(DNASequence &dna, ostringstream &koss,
 			return;
 		koss << "U\t";
 	}
+
 	koss << dna.id << "\t" << call << "\t" << dna.seq.size() << "\t";
 
 	if (Quick_mode) {
