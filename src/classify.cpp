@@ -280,8 +280,9 @@ void incremental_classify_sequence(DNASequence &dna) {
 	//dna.readInfo->
 
 	if (!dna.readInfo->first || dna.seq.size() >= Database.get_k()) {
-		//	std::cout << dna.seq << " TRUE \n";
-		KmerScanner scanner(dna.seq, 0, ~0, !dna.readInfo->first, dna.readInfo->last_kmer);
+		//std::cout << "HERE\n";
+		//std::cout << dna.seq << "\n";
+		KmerScanner scanner(dna.seq, 0, ~0, !dna.readInfo->first, dna.readInfo->last_ambig, dna.readInfo->last_kmer);
 		int c_i=0;
 		while ((kmer_ptr = scanner.next_kmer()) != NULL) {
 			//std::cout << "While " << ++c_i << " " << dna.readInfo->first << " " << dna.readInfo->last_kmer << " " << dna.seq << "\n";
@@ -309,11 +310,12 @@ void incremental_classify_sequence(DNASequence &dna) {
 				}
 			}
 
-			dna.readInfo->last_kmer = *kmer_ptr;;
+			dna.readInfo->last_kmer = *kmer_ptr;
+			dna.readInfo->last_ambig = scanner.get_ambig();
 			dna.readInfo->taxa.push_back(dna.readInfo->taxon);
 		}
 
-		//std::cout << "\n";
+		std::cout << "\n";
 
 		dna.readInfo->first = false;
 	}

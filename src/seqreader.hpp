@@ -49,6 +49,7 @@ struct SeqClassifyInfo{
 	uint16_t pos = 0;
 	uint32_t hits = 0;  // only maintained if in quick mode
 	uint32_t taxon = 0;
+	uint32_t last_ambig = 0;
 	uint64_t last_kmer = 0;
 	uint16_t processed_len = 0;
 	bool first = true;
