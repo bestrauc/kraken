@@ -43,6 +43,7 @@ bool Allow_extra_kmers = false;
 bool Operate_in_RAM = false;
 bool One_FASTA_file = false;
 map<uint32_t, uint32_t> Parent_map;
+map<uint32_t, string> tax_map;
 map<string, uint32_t> ID_to_taxon_map;
 KrakenDB Database;
 
@@ -52,7 +53,7 @@ int main(int argc, char **argv) {
   #endif
 
   parse_command_line(argc, argv);
-  Parent_map = build_parent_map(Nodes_filename);
+  Parent_map = build_parent_map(Nodes_filename, tax_map);
 
   QuickFile db_file(DB_filename, "rw");
   Database = KrakenDB(db_file.ptr());

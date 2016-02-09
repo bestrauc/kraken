@@ -24,9 +24,10 @@ using namespace std;
 
 namespace kraken {
 // Build a node->parent map from NCBI Taxonomy nodes.dmp file
-map<uint32_t, uint32_t> build_parent_map(string filename) {
+map<uint32_t, uint32_t> build_parent_map(string filename, map<uint32_t, string> &taxLevel_map) {
 	map<uint32_t, uint32_t> pmap;
 	uint32_t node_id, parent_id;
+	char tax[14];
 	string line;
 	std::ifstream ifs(filename.c_str());
 	if (ifs.rdstate() & std::ifstream::failbit) {
@@ -37,8 +38,10 @@ map<uint32_t, uint32_t> build_parent_map(string filename) {
 		getline(ifs, line);
 		if (line.empty())
 			break;
-		sscanf(line.c_str(), "%d\t|\t%d", &node_id, &parent_id);
+		sscanf(line.c_str(), "%d\t|\t%d\t|\t%s", &node_id, &parent_id, tax);
 		pmap[node_id] = parent_id;
+		taxLevel_map[node_id] = string(tax);
+		//std::cout << node_id << " " << parent_id << " " << string(tax) << "|\n";
 	}
 	pmap[1] = 0;
 	return pmap;

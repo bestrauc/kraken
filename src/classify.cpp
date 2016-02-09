@@ -35,7 +35,7 @@ void classify_sequence(DNASequence &dna, ostringstream &koss,
 		ostringstream &coss, ostringstream &uoss);
 void incremental_classify_sequence(DNASequence &dna);
 void classify_finalize(DNASequence &dna, ostringstream &koss,
-		ostringstream &coss, ostringstream &uoss);
+		ostringstream &coss, ostringstream &uoss, uint32_t call);
 
 string hitlist_string(vector<uint32_t> &taxa, vector<uint8_t> &ambig);
 set<uint32_t> get_ancestry(uint32_t taxon);
@@ -61,6 +61,7 @@ bool Populate_memory = false;
 bool Only_classified_kraken_output = false;
 uint32_t Minimum_hit_count = 1;
 map<uint32_t, uint32_t> Parent_map;
+map<uint32_t, string> taxLevel_map;
 KrakenDB Database;
 string Classified_output_file, Unclassified_output_file, Kraken_output_file;
 ostream *Classified_output;
@@ -94,8 +95,9 @@ int main(int argc, char **argv) {
 #endif
 
 	parse_command_line(argc, argv);
-	if (! Nodes_filename.empty())
-		Parent_map = build_parent_map(Nodes_filename);
+	if (! Nodes_filename.empty()){
+		Parent_map = build_parent_map(Nodes_filename, taxLevel_map);
+	}
 
 	if (Populate_memory)
 		cerr << "Loading database... ";
@@ -236,10 +238,15 @@ void process_file(char *filename) {
 					//std::cout << work_unit[j].seq << "\n";
 
 					if (work_unit[j].readInfo->pos == length){
-						//std::cout << "Time to finalize " << work_unit[j].readInfo->pos << "!\n";
+						uint32_t call = 0;
+						if (Quick_mode)
+							call = dna.readInfo->hits >= Minimum_hit_count ? dna.readInfo->taxon : 0;
+						else{
+							call = resolve_tree2(dna.readInfo->hit_counts, Parent_map);
+						}
+
 						classify_finalize(work_unit[j], kraken_output_ss,
-								classified_output_ss, unclassified_output_ss);
-						//std::cout << ++total << "TOTAL \n";
+								classified_output_ss, unclassified_output_ss, call);
 					}
 					else{
 						--seq_count;
@@ -315,21 +322,14 @@ void incremental_classify_sequence(DNASequence &dna) {
 			dna.readInfo->taxa.push_back(dna.readInfo->taxon);
 		}
 
-		std::cout << "\n";
+		//std::cout << "\n";
 
 		dna.readInfo->first = false;
 	}
 }
 
 void classify_finalize(DNASequence &dna, ostringstream &koss,
-		ostringstream &coss, ostringstream &uoss){
-
-	uint32_t call = 0;
-	if (Quick_mode)
-		call = dna.readInfo->hits >= Minimum_hit_count ? dna.readInfo->taxon : 0;
-	else{
-		call = resolve_tree2(dna.readInfo->hit_counts, Parent_map);
-	}
+		ostringstream &coss, ostringstream &uoss, uint32_t call){
 
 	//bool test =dna.id == "1101_5" && call;
 	//if (test)
@@ -369,8 +369,7 @@ void classify_finalize(DNASequence &dna, ostringstream &koss,
 			koss << "U\t";
 		}
 
-		//koss << dna.id << "\t" << call << "\t" << dna.seq.size() << "\t";
-		koss << dna.id << "\t" << dna.seq << "\t" << call << "\t" << dna.readInfo->processed_len << "\t";
+//		koss << dna.id << "\t" << dna.seq << "\t" << call << "\t" << dna.readInfo->processed_len << "\t";
 
 		if (Quick_mode) {
 			koss << "Q:" << dna.readInfo->hits;
