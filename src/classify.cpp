@@ -237,22 +237,41 @@ void process_file(char *filename) {
 					//std::cout << ++total << "TOTAL \n";
 					//std::cout << work_unit[j].seq << "\n";
 
-					if (work_unit[j].readInfo->pos == length){
-						//std::cout << "Before call " << work_unit[j].readInfo->hits << "\n";
-						//std::cout << "...\n";
-						uint32_t call = 0;
-						if (Quick_mode)
-							call = work_unit[j].readInfo->hits >= Minimum_hit_count ? work_unit[j].readInfo->taxon : 0;
-						else{
-							call = resolve_tree2(work_unit[j].readInfo->hit_counts, Parent_map);
-						}
+					// try to classify with the information we have
+					uint32_t call = 0;
+					if (Quick_mode)
+						call = work_unit[j].readInfo->hits >= Minimum_hit_count ? work_unit[j].readInfo->taxon : 0;
+					else{
+						call = resolve_tree2(work_unit[j].readInfo->hit_counts, Parent_map);
+					}
 
+					// check if the call has sufficient accuracy (family, genus, species, etc.)
+					// if so, write the output and flag this sequence as classified
+
+					if (work_unit[j].readInfo->pos == length){
 						classify_finalize(work_unit[j], kraken_output_ss,
 								classified_output_ss, unclassified_output_ss, call);
 					}
 					else{
 						--seq_count;
 					}
+
+//					if (work_unit[j].readInfo->pos == length){
+//						//std::cout << "Before call " << work_unit[j].readInfo->hits << "\n";
+//						//std::cout << "...\n";
+//						uint32_t call = 0;
+//						if (Quick_mode)
+//							call = work_unit[j].readInfo->hits >= Minimum_hit_count ? work_unit[j].readInfo->taxon : 0;
+//						else{
+//							call = resolve_tree2(work_unit[j].readInfo->hit_counts, Parent_map);
+//						}
+//
+//						classify_finalize(work_unit[j], kraken_output_ss,
+//								classified_output_ss, unclassified_output_ss, call);
+//					}
+//					else{
+//						--seq_count;
+//					}
 
 					work_unit[j].runContainer->increment_count();
 				}
@@ -371,7 +390,7 @@ void classify_finalize(DNASequence &dna, ostringstream &koss,
 			koss << "U\t";
 		}
 
-//		koss << dna.id << "\t" << dna.seq << "\t" << call << "\t" << dna.readInfo->processed_len << "\t";
+		koss << dna.id << "\t" << call << "\t" << dna.seq.size() << "\t";
 
 		if (Quick_mode) {
 			koss << "Q:" << dna.readInfo->hits;
