@@ -238,11 +238,13 @@ void process_file(char *filename) {
 					//std::cout << work_unit[j].seq << "\n";
 
 					if (work_unit[j].readInfo->pos == length){
+						//std::cout << "Before call " << work_unit[j].readInfo->hits << "\n";
+						//std::cout << "...\n";
 						uint32_t call = 0;
 						if (Quick_mode)
-							call = dna.readInfo->hits >= Minimum_hit_count ? dna.readInfo->taxon : 0;
+							call = work_unit[j].readInfo->hits >= Minimum_hit_count ? work_unit[j].readInfo->taxon : 0;
 						else{
-							call = resolve_tree2(dna.readInfo->hit_counts, Parent_map);
+							call = resolve_tree2(work_unit[j].readInfo->hit_counts, Parent_map);
 						}
 
 						classify_finalize(work_unit[j], kraken_output_ss,
