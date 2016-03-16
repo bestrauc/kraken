@@ -37,6 +37,8 @@ namespace kraken {
                         std::map<uint32_t, uint32_t> &parent_map);
   uint32_t resolve_tree2(std::unordered_map<uint32_t, uint32_t> &hit_counts,
                           std::map<uint32_t, uint32_t> &parent_map);
+  bool check_tax_level(uint32_t, std::string, std::map<uint32_t, uint32_t> &, std::map<uint32_t, std::string> &);
+
 
   class KmerScanner {
     public:

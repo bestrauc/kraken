@@ -47,6 +47,18 @@ map<uint32_t, uint32_t> build_parent_map(string filename, map<uint32_t, string> 
 	return pmap;
 }
 
+// check if the call corresponds to at least the taxon level ("genus" etc.) required
+bool check_tax_level(uint32_t call, string level, map<uint32_t, uint32_t> & parent_map, map<uint32_t, string> &taxLevel_map){
+	// check the taxonomic ancestors of the call
+	while ((call!=0) && (taxLevel_map[call] != level)){
+		call = parent_map[call];
+	}
+
+	// if we found the root of the taxonomic tree, the taxon
+	// was below the taxonomic level we wanted
+	return (call != 0);
+}
+
 // Return lowest common ancestor of a and b
 // LCA(0,x) = LCA(x,0) = x
 // Default ancestor is 1 (root of tree)

@@ -101,8 +101,12 @@ namespace kraken {
 
 		// check if the next 'step' number of cycles were generated for the active_tile
 		// otherwise we wait (blocks successive tiles too, but we read all together)
+		int next_step = step;
 		int last_cycle = lastTileCycle[active_tile];
-		int target_cycle = std::min(last_cycle + step, length-1);
+		if (last_cycle == 0)
+			next_step += start_step;
+
+		int target_cycle = std::min(last_cycle + next_step, length-1);
 
 		// what are we doing here
 		while (!fs::exists(cyclePaths[active_lane-1][target_cycle])){

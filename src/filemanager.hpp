@@ -39,8 +39,9 @@ private:
 	int active_lane = 1;
 	int length;
 	int max_tile;
-	//int step = 31;
-	int step = 100;
+	int start_step = 21;
+	int step = 10;
+	//int step = 100;
 
 	// set to true initially, will be made false when we don't reach the end
 	bool end_reached = true;

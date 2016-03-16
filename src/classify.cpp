@@ -192,12 +192,14 @@ void process_file(char *filename) {
 	else
 		reader = new BCLReader(file_str, length, max_tile);
 
-	uint64_t read_time=0, process_time=0;
-	uint64_t total = 0;
+	//uint64_t read_time=0, process_time=0;
+	//uint64_t total = 0;
 
-	#pragma omp parallel reduction(+:read_time, process_time)
+	std::map<int, int> classified_count;
+
+	#pragma omp parallel // reduction(+:read_time, process_time)
 	{
-		uint64_t t1=0, t3=0;
+		//uint64_t t1=0, t3=0;
 
 		vector<DNASequence> work_unit;
 		ostringstream kraken_output_ss, classified_output_ss, unclassified_output_ss;
@@ -210,7 +212,6 @@ void process_file(char *filename) {
 				while (total_nt < Work_unit_size) {
 					dna = reader->next_sequence();
 					if (! reader->is_valid() || dna.seq.empty()){
-						//std::cout << "leaving the collector\n";
 						break;
 					}
 					work_unit.push_back(dna);
@@ -224,7 +225,8 @@ void process_file(char *filename) {
 			classified_output_ss.str("");
 			unclassified_output_ss.str("");
 
-			uint64_t seq_count=work_unit.size();
+			uint64_t seq_count=0;
+			int called = 0;
 			//std::cout << seq_count << " seqs\n";
 
 			for (size_t j = 0; j < work_unit.size(); j++){
@@ -233,6 +235,12 @@ void process_file(char *filename) {
 						classified_output_ss, unclassified_output_ss);
 				}
 				else {
+					if (work_unit[j].readInfo->skip){
+						work_unit[j].runContainer->increment_count();
+						continue;
+					}
+
+
 					incremental_classify_sequence(work_unit[j]);
 					//std::cout << ++total << "TOTAL \n";
 					//std::cout << work_unit[j].seq << "\n";
@@ -245,15 +253,16 @@ void process_file(char *filename) {
 						call = resolve_tree2(work_unit[j].readInfo->hit_counts, Parent_map);
 					}
 
+					bool tax_call = check_tax_level(call, "genus", Parent_map, taxLevel_map);
+
 					// check if the call has sufficient accuracy (family, genus, species, etc.)
 					// if so, write the output and flag this sequence as classified
-
-					if (work_unit[j].readInfo->pos == length){
+					if (tax_call || work_unit[j].readInfo->pos == length){
+						called++;
+						seq_count++;
+						work_unit[j].readInfo->skip = true;
 						classify_finalize(work_unit[j], kraken_output_ss,
 								classified_output_ss, unclassified_output_ss, call);
-					}
-					else{
-						--seq_count;
 					}
 
 //					if (work_unit[j].readInfo->pos == length){
@@ -277,8 +286,14 @@ void process_file(char *filename) {
 				}
 			}
 
+			//std::cout << "COUNT: " << work_unit[0].runContainer->runsize << " " << work_unit[0].runContainer->count << "\n";
+
 			#pragma omp critical(write_output)
 			{
+				int size = work_unit[0].readInfo->processed_len;
+				classified_count[size] += called;
+				//std::cout << size << " " << classified_count[size] << "\n";
+
 				if (Print_kraken)
 					(*Kraken_output) << kraken_output_ss.str();
 				if (Print_classified)
@@ -292,6 +307,9 @@ void process_file(char *filename) {
 		}
 
 	}  // end parallel section
+
+	for (auto a: classified_count)
+		std::cout << a.first << " " << a.second << "\n";
 
 	delete reader;
 }
@@ -352,11 +370,7 @@ void incremental_classify_sequence(DNASequence &dna) {
 void classify_finalize(DNASequence &dna, ostringstream &koss,
 		ostringstream &coss, ostringstream &uoss, uint32_t call){
 
-	//bool test =dna.id == "1101_5" && call;
-	//if (test)
-	//std::cout << dna.id << " " << call << " " << total_classified << " CALL\n";
-
-	if (call)
+		if (call)
 			#pragma omp atomic
 			total_classified++;
 

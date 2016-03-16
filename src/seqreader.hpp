@@ -52,6 +52,7 @@ struct SeqClassifyInfo{
 	uint32_t last_ambig = 0;
 	uint64_t last_kmer = 0;
 	uint16_t processed_len = 0;
+	bool skip = false;
 	bool first = true;
 
 	template<class Archive>
@@ -87,7 +88,7 @@ struct RunInfoContainer{
 
 	void increment_count(){
 		++count; // atomic increase
-		//std::cout << count << " " << runInfoList.size() << "\n";
+		//std::cout << count << " " << runsize << "\n";
 
 		// Release run information for writing when all information has been updated.
 		if (count == runsize)

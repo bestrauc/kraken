@@ -495,6 +495,7 @@ void BCLReader::addSequenceBuffer(TileInfo tile){
 
 	// is the tile we about to read more bases from scheduled for processing?
 	if (!runInfoMap[tile.lane_num][tile.tile_num]->processing_lock.try_lock()){
+		std::cout << runInfoMap[tile.lane_num][tile.tile_num]->runsize << " " << runInfoMap[tile.lane_num][tile.tile_num]->count << "\n";
 		std::cout << "Waiting for last tile \n";
 		// if tile waits for processing: tell main thread to go ahead
 		process_status = 2;
