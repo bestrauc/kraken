@@ -74,21 +74,6 @@ uint64_t total_sequences = 0;
 uint64_t total_bases = 0;
 
 
-//uint64_t GetTimeMs64(){
-//	struct timeval tv;
-//
-//	gettimeofday(&tv, NULL);
-//
-//	uint64_t ret = tv.tv_usec;
-//	/* Convert from micro seconds (10^-6) to milliseconds (10^-3) */
-//	ret /= 1000;
-//
-//	/* Adds the seconds (10^0) after converting them to milliseconds (10^-3) */
-//	ret += (tv.tv_sec * 1000);
-//
-//	return ret;
-//}
-
 int main(int argc, char **argv) {
 #ifdef _OPENMP
 	omp_set_num_threads(1);
@@ -195,7 +180,9 @@ void process_file(char *filename) {
 	//uint64_t read_time=0, process_time=0;
 	//uint64_t total = 0;
 
-	std::map<int, int> classified_count;
+	// save a log of the classifications at each iteration
+	// (iteration, call) -> count
+	std::map<int, std::map<int, int> > classified_count;
 
 	#pragma omp parallel // reduction(+:read_time, process_time)
 	{
@@ -226,8 +213,9 @@ void process_file(char *filename) {
 			unclassified_output_ss.str("");
 
 			uint64_t seq_count=0;
-			int called = 0;
-			//std::cout << seq_count << " seqs\n";
+
+			// call -> count map
+			std::map<int, std::map<int, int> > called;
 
 			for (size_t j = 0; j < work_unit.size(); j++){
 				if (File_input != BCL){
@@ -235,11 +223,11 @@ void process_file(char *filename) {
 						classified_output_ss, unclassified_output_ss);
 				}
 				else {
+					// if we have classified this sequence already, skip
 					if (work_unit[j].readInfo->skip){
 						work_unit[j].runContainer->increment_count();
 						continue;
 					}
-
 
 					incremental_classify_sequence(work_unit[j]);
 					//std::cout << ++total << "TOTAL \n";
@@ -253,34 +241,19 @@ void process_file(char *filename) {
 						call = resolve_tree2(work_unit[j].readInfo->hit_counts, Parent_map);
 					}
 
+					called[work_unit[j].readInfo->processed_len][call]++;
+
 					bool tax_call = check_tax_level(call, "genus", Parent_map, taxLevel_map);
 
 					// check if the call has sufficient accuracy (family, genus, species, etc.)
 					// if so, write the output and flag this sequence as classified
 					if (tax_call || work_unit[j].readInfo->pos == length){
-						called++;
+						//called++;
 						seq_count++;
 						work_unit[j].readInfo->skip = true;
 						classify_finalize(work_unit[j], kraken_output_ss,
 								classified_output_ss, unclassified_output_ss, call);
 					}
-
-//					if (work_unit[j].readInfo->pos == length){
-//						//std::cout << "Before call " << work_unit[j].readInfo->hits << "\n";
-//						//std::cout << "...\n";
-//						uint32_t call = 0;
-//						if (Quick_mode)
-//							call = work_unit[j].readInfo->hits >= Minimum_hit_count ? work_unit[j].readInfo->taxon : 0;
-//						else{
-//							call = resolve_tree2(work_unit[j].readInfo->hit_counts, Parent_map);
-//						}
-//
-//						classify_finalize(work_unit[j], kraken_output_ss,
-//								classified_output_ss, unclassified_output_ss, call);
-//					}
-//					else{
-//						--seq_count;
-//					}
 
 					work_unit[j].runContainer->increment_count();
 				}
@@ -290,8 +263,15 @@ void process_file(char *filename) {
 
 			#pragma omp critical(write_output)
 			{
-				int size = work_unit[0].readInfo->processed_len;
-				classified_count[size] += called;
+				//int size = work_unit[0].readInfo->processed_len;
+				for (std::map<int, std::map<int, int> >::iterator it = called.begin(); it != called.end(); ++it){
+					int size = it->first;
+					for (std::map<int, int>::iterator it2 = it->second.begin(); it2 != it->second.end(); ++it2){
+						int call = it2->first;
+						classified_count[size][call] += it2->second;
+					}
+				}
+
 				//std::cout << size << " " << classified_count[size] << "\n";
 
 				if (Print_kraken)
@@ -308,8 +288,19 @@ void process_file(char *filename) {
 
 	}  // end parallel section
 
-	for (auto a: classified_count)
-		std::cout << a.first << " " << a.second << "\n";
+	for (auto a: classified_count){
+		int sum = 0;
+		std::cout << a.first << " : ";
+		for (auto b: a.second){
+			sum += b.second;
+			std::cout << "(" << b.first << "," << b.second << ")" << " - ";
+		}
+
+		std::cout << "Sum: " << sum << std::endl;
+	}
+
+	//for (auto a: classified_count)
+	//	std::cout << a.first << " " << a.second << "\n";
 
 	delete reader;
 }
@@ -404,7 +395,7 @@ void classify_finalize(DNASequence &dna, ostringstream &koss,
 			koss << "U\t";
 		}
 
-		koss << dna.id << "\t" << call << "\t" << dna.seq.size() << "\t";
+		koss << dna.id << "\t" << call << "\t" << dna.readInfo->processed_len << "\t";
 
 		if (Quick_mode) {
 			koss << "Q:" << dna.readInfo->hits;
