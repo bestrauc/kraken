@@ -110,7 +110,7 @@ namespace kraken {
 
 		// what are we doing here
 		while (!fs::exists(cyclePaths[active_lane-1][target_cycle])){
-			std::cout << "wutwut\n";
+			std::cout << cyclePaths[active_lane-1][target_cycle] << "\n";
 			std::this_thread::sleep_for(std::chrono::seconds(5));
 		}
 

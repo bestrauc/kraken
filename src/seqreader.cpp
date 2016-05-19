@@ -29,21 +29,6 @@
 #   define LOG(x) cerr << x//do {} while (0)
 #endif
 
-uint64_t GetTimeMs64(){
-	struct timeval tv;
-
-	gettimeofday(&tv, NULL);
-
-	uint64_t ret = tv.tv_usec;
-	/* Convert from micro seconds (10^-6) to milliseconds (10^-3) */
-	ret /= 1000;
-
-	/* Adds the seconds (10^0) after converting them to milliseconds (10^-3) */
-	ret += (tv.tv_sec * 1000);
-
-	return ret;
-}
-
 using namespace std;
 namespace fs = boost::filesystem;
 
@@ -238,12 +223,12 @@ bool scanTile(int tile_num, const fs::path &tile_path, TRunInfoList &runInfoList
 	uint64_t t1=0, t2=0, read_time=0, process_time=0;
 
 	while(!in_file.eof()){
-		t1 = GetTimeMs64();
+		//t1 = GetTimeMs64();
 
 		in_file.read(raw_buffer, sizeof(raw_buffer));
 
-		read_time += (GetTimeMs64() - t1);
-		t2 = GetTimeMs64();
+		//read_time += (GetTimeMs64() - t1);
+		//t2 = GetTimeMs64();
 
 		#pragma omp parallel for num_threads(4) reduction(+:process_time)
 		for (unsigned i=0; i < in_file.gcount(); ++i){
@@ -286,7 +271,7 @@ bool scanTile(int tile_num, const fs::path &tile_path, TRunInfoList &runInfoList
 			buffer->at(rev_index).quals += qualChar;
 			buffer->at(rev_index).readInfo->processed_len++;
 
-			process_time += (GetTimeMs64() - t2);
+			//process_time += (GetTimeMs64() - t2);
 		}
 
 		pos += in_file.gcount();
@@ -392,8 +377,6 @@ DNASequence BCLReader::next_sequence() {
 			LOG("\nWaiting for buffer to be filled...\n");
 #endif
 
-		//std::cout <<
-
 		// verify that we are not waiting for the same tile
 		if (concurrentBufferQueue.empty()){
 			// wait for confirmation about next tile being processed or not
@@ -474,6 +457,7 @@ bool BCLReader::fillSequenceBuffer(){
 
 	// Start thread that reads the BCL tile file into a buffer.
 	std::thread sequenceReader(&BCLReader::addSequenceBuffer, this, tile);
+	//addSequenceBuffer(tile);
 
 	// Tile processing thread runs independently, we will block later to wait.
 	sequenceReader.detach();

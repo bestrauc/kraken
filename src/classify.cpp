@@ -73,6 +73,41 @@ uint64_t total_classified = 0;
 uint64_t total_sequences = 0;
 uint64_t total_bases = 0;
 
+uint64_t GetTimeMs64()
+{
+#ifdef _WIN32
+ /* Windows */
+ FILETIME ft;
+ LARGE_INTEGER li;
+
+ /* Get the amount of 100 nano seconds intervals elapsed since January 1, 1601 (UTC) and copy it
+  * to a LARGE_INTEGER structure. */
+ GetSystemTimeAsFileTime(&ft);
+ li.LowPart = ft.dwLowDateTime;
+ li.HighPart = ft.dwHighDateTime;
+
+ uint64 ret = li.QuadPart;
+ ret -= 116444736000000000LL; /* Convert from file time to UNIX epoch time. */
+ ret /= 10000; /* From 100 nano seconds (10^-7) to 1 millisecond (10^-3) intervals */
+
+ return ret;
+#else
+ /* Linux */
+ struct timeval tv;
+
+ gettimeofday(&tv, NULL);
+
+ uint64_t ret = tv.tv_usec;
+ /* Convert from micro seconds (10^-6) to milliseconds (10^-3) */
+ ret /= 1000;
+
+ /* Adds the seconds (10^0) after converting them to milliseconds (10^-3) */
+ ret += (tv.tv_sec * 1000);
+
+ return ret;
+#endif
+}
+
 
 int main(int argc, char **argv) {
 #ifdef _OPENMP
@@ -177,17 +212,16 @@ void process_file(char *filename) {
 	else
 		reader = new BCLReader(file_str, length, max_tile);
 
-	//uint64_t read_time=0, process_time=0;
+	uint64_t read_time=0, process_time=0;
 	//uint64_t total = 0;
 
 	// save a log of the classifications at each iteration
 	// (iteration, call) -> count
 	std::map<int, std::map<int, int> > classified_count;
 
-	#pragma omp parallel // reduction(+:read_time, process_time)
+	uint64_t t = GetTimeMs64();
+	#pragma omp parallel// reduction(+:read_time, process_time)
 	{
-		//uint64_t t1=0, t3=0;
-
 		vector<DNASequence> work_unit;
 		ostringstream kraken_output_ss, classified_output_ss, unclassified_output_ss;
 
@@ -196,6 +230,7 @@ void process_file(char *filename) {
 			size_t total_nt = 0;
 			#pragma omp critical(get_input)
 			{
+				uint64_t t1 = GetTimeMs64();
 				while (total_nt < Work_unit_size) {
 					dna = reader->next_sequence();
 					if (! reader->is_valid() || dna.seq.empty()){
@@ -204,6 +239,8 @@ void process_file(char *filename) {
 					work_unit.push_back(dna);
 					total_nt += dna.seq.size();
 				}
+
+				read_time += (GetTimeMs64() - t1);
 			}
 			if (total_nt == 0)
 				break;
@@ -247,7 +284,7 @@ void process_file(char *filename) {
 
 					// check if the call has sufficient accuracy (family, genus, species, etc.)
 					// if so, write the output and flag this sequence as classified
-					if (tax_call || work_unit[j].readInfo->pos == length){
+					if (tax_call || work_unit[j].readInfo->pos >= length){
 						//called++;
 						seq_count++;
 						work_unit[j].readInfo->skip = true;
@@ -288,6 +325,9 @@ void process_file(char *filename) {
 
 	}  // end parallel section
 
+	process_time = (GetTimeMs64() - t) - read_time;
+
+	/*
 	for (auto a: classified_count){
 		int sum = 0;
 		std::cout << a.first << " : ";
@@ -297,7 +337,9 @@ void process_file(char *filename) {
 		}
 
 		std::cout << "Sum: " << sum << std::endl;
-	}
+	}*/
+
+	std::cout << "Read: " << read_time << ", Process: " << process_time << "\n";
 
 	//for (auto a: classified_count)
 	//	std::cout << a.first << " " << a.second << "\n";

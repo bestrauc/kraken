@@ -40,8 +40,8 @@ private:
 	int length;
 	int max_tile;
 	int start_step = 21;
-	int step = 10;
-	//int step = 100;
+	//int step = 10;
+	int step = 200;
 
 	// set to true initially, will be made false when we don't reach the end
 	bool end_reached = true;
