@@ -39,7 +39,7 @@ private:
 	int active_lane = 1;
 	int length;
 	int max_tile;
-	int start_step = 21;
+	int start_step = 30;
 	//int step = 10;
 	int step = 200;
 
