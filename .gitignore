@@ -1,12 +1,21 @@
-.svn*
-kraken_db
-minikraken*
 *.o
 src/classify
 src/db_shrink
 src/db_sort
 src/make_seqid_to_taxid_map
 src/set_lcas
-src/.cproject
-src/.project
-src/.settings/language.settings.xml
+
+### CLion specific ignores
+# User-specific stuff:
+.idea/**/workspace.xml
+.idea/**/tasks.xml
+.idea/dictionaries
+
+# Sensitive or high-churn files:
+.idea/**/dataSources/
+.idea/**/dataSources.ids
+.idea/**/dataSources.xml
+.idea/**/dataSources.local.xml
+.idea/**/sqlDataSources.xml
+.idea/**/dynamic.xml
+.idea/**/uiDesigner.xml

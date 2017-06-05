@@ -26,7 +26,7 @@
 #ifdef DEBUG
 #   define LOG(x) cerr << x
 #else
-#   define LOG(x) cerr << x//do {} while (0)
+#   define do {} while (0)
 #endif
 
 using namespace std;
@@ -402,7 +402,7 @@ DNASequence BCLReader::next_sequence() {
 		// Get buffered reads.
 		sequenceBuffer = std::move(concurrentBufferQueue.pop()); // this is blocking
 
-		LOG(std::cout << "Found buffer. Size: " << sequenceBuffer->size() << "\n");
+		//LOG(std::cout << "Found buffer. Size: " << sequenceBuffer->size() << "\n");
 
 		// After consuming a buffer from the queue, spawn a new sequence reader.
 		if (_valid){
@@ -468,7 +468,7 @@ bool BCLReader::fillSequenceBuffer(){
 // Creates a new sequence buffer, fills it with reads from the tile numbered
 // "tile_num" and adds it to the Queue of buffers which Kraken consumes.
 void BCLReader::addSequenceBuffer(TileInfo tile){
-	LOG("Entered addSequenceBuffer " << std::cout << tile.lane_num << " " << tile.tile_num << "\n");
+	//LOG("Entered addSequenceBuffer " << std::cout << tile.lane_num << " " << tile.tile_num << "\n");
 	// Create new buffer to hold the reads.
 	std::unique_ptr<TDNABuffer> buffer(new TDNABuffer());
 	// std::shared_ptr<RunInfoContainer> runInfo(new RunInfoContainer(tile.lane_num, tile.tile_num, tile.last_cycle));
@@ -545,7 +545,7 @@ void BCLReader::addSequenceBuffer(TileInfo tile){
 	// (It is a concurrent queue, so multiple threads can access it.)
 	concurrentBufferQueue.push(std::move(buffer));
 	//concurrentRunInfoQueue.push(runInfoMap[tile.lane_num][tile.tile_num]);
-	LOG("Ended addSequenceBuffer" << tile.tile_num << "\n");
+	//LOG("Ended addSequenceBuffer" << tile.tile_num << "\n");
 }
 
 void BCLReader::saveRunInfo(){
