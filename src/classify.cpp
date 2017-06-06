@@ -21,7 +21,7 @@
 #include "krakendb.hpp"
 #include "krakenutil.hpp"
 #include "quickfile.hpp"
-#include "seqreader.hpp"
+//#include "seqreader.hpp"
 
 const size_t DEF_WORK_UNIT_SIZE = 500000;
 
