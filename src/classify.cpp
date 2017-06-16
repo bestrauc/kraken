@@ -206,9 +206,9 @@ void process_file(char *filename) {
 
 	//if (Fastq_input)
 	if (File_input == FASTQ)
-		reader = new FastqReader(file_str);
+		reader = new FastqReader(file_str, length);
 	else if (File_input == FASTA)
-		reader = new FastaReader(file_str);
+		reader = new FastaReader(file_str, length);
 	else
 		reader = new BCLReader(file_str, length, max_tile);
 
@@ -466,6 +466,7 @@ void classify_sequence(DNASequence &dna, ostringstream &koss,
 	int64_t current_max_pos = 0;
 
 	if (dna.seq.size() >= Database.get_k()) {
+		//std::cout << dna.seq.size() << " - " << (int)Database.get_k() << "\n";
 		KmerScanner scanner(dna.seq);
 		while ((kmer_ptr = scanner.next_kmer()) != NULL) {
 			taxon = 0;
