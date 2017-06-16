@@ -206,9 +206,9 @@ void process_file(char *filename) {
 
 	//if (Fastq_input)
 	if (File_input == FASTQ)
-		reader = new FastqReader(file_str);
+		reader = new FastqReader(file_str, length);
 	else if (File_input == FASTA)
-		reader = new FastaReader(file_str);
+		reader = new FastaReader(file_str, length);
 	else
 		reader = new BCLReader(file_str, length, max_tile);
 

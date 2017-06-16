@@ -33,13 +33,16 @@ using namespace std;
 namespace fs = boost::filesystem;
 
 namespace kraken {
-FastaReader::FastaReader(string filename) {
+FastaReader::FastaReader(string filename, int length) {
 	file.open(filename.c_str());
 	if (file.rdstate() & std::ifstream::failbit) {
 		err(EX_NOINPUT, "can't open %s", filename.c_str());
 	}
 	valid = true;
+	classify_length = length;
 }
+
+FastaReader::FastaReader(string filename) : FastaReader::FastaReader(filename, 0) {}
 
 DNASequence FastaReader::next_sequence() {
 	DNASequence dna;
@@ -94,13 +97,16 @@ bool FastaReader::is_valid() {
 	return valid;
 }
 
-FastqReader::FastqReader(string filename) {
+FastqReader::FastqReader(string filename, int length) {
 	file.open(filename.c_str());
 	if (file.rdstate() & std::ifstream::failbit) {
 		err(EX_NOINPUT, "can't open %s", filename.c_str());
 	}
 	valid = true;
+	classify_length = length;
 }
+
+FastqReader::FastqReader(string filename) : FastqReader::FastqReader(filename, 0) {}
 
 DNASequence FastqReader::next_sequence() {
 	DNASequence dna;
@@ -136,6 +142,13 @@ DNASequence FastqReader::next_sequence() {
 		return dna;
 	}
 	getline(file, dna.quals);
+
+	// trim seq and quals if a sequence_length > 0 was given
+	// (only trim if seq and qual lenghs are > length)
+	if ((dna.seq.size() > classify_length) && classify_length > 0){
+		dna.seq.resize(classify_length);
+		dna.quals.resize(classify_length);
+	}
 
 	return dna;
 }

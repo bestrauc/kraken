@@ -119,6 +119,7 @@ public:
 class FastaReader : public DNASequenceReader {
 public:
 	FastaReader(std::string filename);
+	FastaReader(std::string filename, int length);
 	DNASequence next_sequence();
 	bool is_valid();
 
@@ -126,17 +127,20 @@ private:
 	std::ifstream file;
 	std::string linebuffer;
 	bool valid;
+	int classify_length;
 };
 
 class FastqReader : public DNASequenceReader {
 public:
 	FastqReader(std::string filename);
+	FastqReader(std::string filename, int length);
 	DNASequence next_sequence();
 	bool is_valid();
 
 private:
 	std::ifstream file;
 	bool valid;
+	int classify_length;
 };
 
 class BCLReader : public DNASequenceReader {
