@@ -371,7 +371,7 @@ DNASequence BCLReader::next_sequence() {
 
 	// We execute this for the first time, start a sequence reader.
 	if (sequenceBuffer == nullptr){
-		std::cout << "Spawning sequence reader\n";
+        std::cout << "Spawning sequence reader\n";
 		fillSequenceBuffer();
 		//sequenceBuffer = std::move(concurrentBufferQueue.pop()); // this is blocking
 	}
@@ -472,11 +472,11 @@ bool BCLReader::fillSequenceBuffer(){
 	}
 
 	// Start thread that reads the BCL tile file into a buffer.
-	std::thread sequenceReader(&BCLReader::addSequenceBuffer, this, tile);
-	//addSequenceBuffer(tile);
+//	std::thread sequenceReader(&BCLReader::addSequenceBuffer, this, tile);
+	addSequenceBuffer(tile);
 
 	// Tile processing thread runs independently, we will block later to wait.
-	sequenceReader.detach();
+//	sequenceReader.detach();
 
 	return true;
 }
