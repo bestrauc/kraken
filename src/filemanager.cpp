@@ -110,13 +110,13 @@ namespace kraken {
 
 		// what are we doing here
 		while (!fs::exists(cyclePaths[active_lane-1][target_cycle])){
-			std::cout << cyclePaths[active_lane-1][target_cycle] << "\n";
+			//std::cout << cyclePaths[active_lane-1][target_cycle] << "\n";
 			std::this_thread::sleep_for(std::chrono::seconds(5));
 		}
 
-		std::cout << active_lane-1 << " " << last_cycle << " " << target_cycle << " " << cyclePaths[active_lane-1].size() << "\n";
+		//std::cout << active_lane-1 << " " << last_cycle << " " << target_cycle << " " << cyclePaths[active_lane-1].size() << "\n";
 
-		std::cout << "Target found: " << target_cycle << "\n";
+		//std::cout << "Target found: " << target_cycle << "\n";
 
 		// add cycles that exist beyond our target cycle
 		//while (target_cycle < length && fs::exists(cyclePaths[active_lane-1][target_cycle]))

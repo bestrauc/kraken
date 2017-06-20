@@ -259,6 +259,8 @@ void process_file(char *filename) {
 
             //continue;
 
+			std::cout << work_unit[0].readInfo->pos << "\n";
+
 			uint64_t t1 = GetTimeMs64();
 			for (size_t j = 0; j < work_unit.size(); j++){
                 // if fasta or fastq - classify directly and output
@@ -376,8 +378,8 @@ void incremental_classify_sequence(DNASequence &dna, uint32_t &call) {
 	if (!dna.readInfo->first || dna.seq.size() >= Database.get_k()) {
 		//std::cout << "HERE\n";
 		//std::cout << dna.seq << "\n";
-//		KmerScanner scanner(dna.seq, 0, ~0, !dna.readInfo->first, dna.readInfo->last_ambig, dna.readInfo->last_kmer);
-		KmerScanner scanner(dna.seq);
+		KmerScanner scanner(dna.seq, 0, ~0, !dna.readInfo->first, dna.readInfo->last_ambig, dna.readInfo->last_kmer);
+		//KmerScanner scanner(dna.seq);
 //		int c_i=0;
 		while ((kmer_ptr = scanner.next_kmer()) != NULL) {
 			//std::cout << "While " << ++c_i << " " << dna.readInfo->first << " " << dna.readInfo->last_kmer << " " << dna.seq << "\n";

@@ -229,7 +229,7 @@ bool scanTile(int tile_num, const fs::path &tile_path, TRunInfoList &runInfoList
 		runInfoList.resize(N);
 		old_runinfo = false;
 		runInfo->runsize = N;
-		std::cout << N << "\n";
+		//std::cout << N << "\n";
 	}
 
 	//else
@@ -371,7 +371,7 @@ DNASequence BCLReader::next_sequence() {
 
 	// We execute this for the first time, start a sequence reader.
 	if (sequenceBuffer == nullptr){
-        std::cout << "Spawning sequence reader\n";
+        //std::cout << "Spawning sequence reader\n";
 		fillSequenceBuffer();
 		//sequenceBuffer = std::move(concurrentBufferQueue.pop()); // this is blocking
 	}
@@ -394,6 +394,7 @@ DNASequence BCLReader::next_sequence() {
 #endif
 
 		// verify that we are not waiting for the same tile
+		/*
 		if (concurrentBufferQueue.empty()){
 			// wait for confirmation about next tile being processed or not
 			std::mutex m;
@@ -412,8 +413,7 @@ DNASequence BCLReader::next_sequence() {
 			if (old_status == 2)
 				return dna;
 		}
-
-
+		*/
 
 		// Get buffered reads.
 		sequenceBuffer = std::move(concurrentBufferQueue.pop()); // this is blocking
@@ -422,7 +422,7 @@ DNASequence BCLReader::next_sequence() {
 
 		// After consuming a buffer from the queue, spawn a new sequence reader.
 		if (_valid){
-			std::cout << "Spawning sequence reader\n";
+			//std::cout << "Spawning sequence reader\n";
 			fillSequenceBuffer();
 		}
 	}
@@ -493,6 +493,7 @@ void BCLReader::addSequenceBuffer(TileInfo tile){
 	if (runInfoMap[tile.lane_num][tile.tile_num] == nullptr)
 		runInfoMap[tile.lane_num][tile.tile_num] = std::make_shared<RunInfoContainer>(tile.lane_num, tile.tile_num, tile.last_cycle);
 
+	/*
 	// is the tile we about to read more bases from scheduled for processing?
 	if (!runInfoMap[tile.lane_num][tile.tile_num]->processing_lock.try_lock()){
 		std::cout << runInfoMap[tile.lane_num][tile.tile_num]->runsize << " " << runInfoMap[tile.lane_num][tile.tile_num]->count << "\n";
@@ -508,6 +509,7 @@ void BCLReader::addSequenceBuffer(TileInfo tile){
 	// set the status to indicate that we can read the next tile
 	process_status = 1;
 	processing_var.notify_all();
+	*/
 
 	//runInfoMap[tile.lane_num][tile.tile_num]->processing_lock.lock();
 	runInfoMap[tile.lane_num][tile.tile_num]->lane_num = tile.lane_num;
@@ -543,7 +545,7 @@ void BCLReader::addSequenceBuffer(TileInfo tile){
 	//std::vector<bool> tile_filter;
 	//scanFilter(fs::path(s), tile_filter);
 
-	std::cout << "Filling sequence buffer.\n";
+	//std::cout << "Filling sequence buffer.\n";
 
 	// Process current tile in each cycle directory.
 	for (int i=tile.first_cycle; i < tile.last_cycle; ++i){
