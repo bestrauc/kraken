@@ -24,8 +24,8 @@ using namespace std;
 
 namespace kraken {
 // Build a node->parent map from NCBI Taxonomy nodes.dmp file
-map<uint32_t, uint32_t> build_parent_map(string filename, map<uint32_t, string> &taxLevel_map) {
-	map<uint32_t, uint32_t> pmap;
+unordered_map<uint32_t, uint32_t> build_parent_map(string filename, unordered_map<uint32_t, string> &taxLevel_map) {
+	unordered_map<uint32_t, uint32_t> pmap;
 	uint32_t node_id, parent_id;
 	char tax[14];
 	string line;
@@ -48,7 +48,7 @@ map<uint32_t, uint32_t> build_parent_map(string filename, map<uint32_t, string> 
 }
 
 // check if the call corresponds to at least the taxon level ("genus" etc.) required
-bool check_tax_level(uint32_t call, string level, map<uint32_t, uint32_t> & parent_map, map<uint32_t, string> &taxLevel_map){
+bool check_tax_level(uint32_t call, string level, unordered_map<uint32_t, uint32_t> & parent_map, unordered_map<uint32_t, string> &taxLevel_map){
 	// check the taxonomic ancestors of the call
 	while ((call!=0) && (taxLevel_map[call] != level)){
 		call = parent_map[call];
@@ -80,6 +80,26 @@ uint32_t lca(map<uint32_t, uint32_t> &parent_map,
 	}
 	return 1;
 }
+
+uint32_t lca(unordered_map<uint32_t, uint32_t> &parent_map,
+		uint32_t a, uint32_t b)
+{
+	if (a == 0 || b == 0)
+		return a ? a : b;
+
+	set<uint32_t> a_path;
+	while (a > 0) {
+		a_path.insert(a);
+		a = parent_map[a];
+	}
+	while (b > 0) {
+		if (a_path.count(b) > 0)
+			return b;
+		b = parent_map[b];
+	}
+	return 1;
+}
+
 
 // Tree resolution: take all hit taxa (plus ancestors), then
 // return leaf of highest weighted leaf-to-root path.
@@ -129,7 +149,7 @@ uint32_t resolve_tree(map<uint32_t, uint32_t> &hit_counts,
 // Tree resolution: take all hit taxa (plus ancestors), then
 // return leaf of highest weighted leaf-to-root path.
 uint32_t resolve_tree2(unordered_map<uint32_t, uint32_t> &hit_counts,
-		map<uint32_t, uint32_t> &parent_map)
+		unordered_map<uint32_t, uint32_t> &parent_map)
 {
 	set<uint32_t> max_taxa;
 	uint32_t max_taxon = 0, max_score = 0;

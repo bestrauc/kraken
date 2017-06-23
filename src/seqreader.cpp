@@ -472,11 +472,11 @@ bool BCLReader::fillSequenceBuffer(){
 	}
 
 	// Start thread that reads the BCL tile file into a buffer.
-//	std::thread sequenceReader(&BCLReader::addSequenceBuffer, this, tile);
-	addSequenceBuffer(tile);
+	std::thread sequenceReader(&BCLReader::addSequenceBuffer, this, tile);
+//	addSequenceBuffer(tile);
 
 	// Tile processing thread runs independently, we will block later to wait.
-//	sequenceReader.detach();
+	sequenceReader.detach();
 
 	return true;
 }

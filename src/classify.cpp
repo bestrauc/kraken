@@ -60,8 +60,8 @@ bool Print_kraken = true;
 bool Populate_memory = false;
 bool Only_classified_kraken_output = false;
 uint32_t Minimum_hit_count = 1;
-map<uint32_t, uint32_t> Parent_map;
-map<uint32_t, string> taxLevel_map;
+unordered_map<uint32_t, uint32_t> Parent_map;
+unordered_map<uint32_t, string> taxLevel_map;
 KrakenDB Database;
 string Classified_output_file, Unclassified_output_file, Kraken_output_file;
 ostream *Classified_output;
@@ -219,7 +219,9 @@ void process_file(char *filename) {
 	// (iteration, call) -> count
 	std::map<int, std::map<int, int> > classified_count;
 
-	uint64_t t = GetTimeMs64();
+//	std::cout << "Before start\n";
+
+	//uint64_t t = GetTimeMs64();
 	#pragma omp parallel reduction(+:read_time, process_time)
 	{
 		vector<DNASequence> work_unit;
@@ -242,8 +244,11 @@ void process_file(char *filename) {
 
 				read_time += (GetTimeMs64() - t1);
 			}
+
 			if (total_nt == 0)
 				break;
+
+//			std::cout << "After read\n";
 
 			kraken_output_ss.str("");
 			classified_output_ss.str("");
@@ -259,7 +264,7 @@ void process_file(char *filename) {
 
             //continue;
 
-			std::cout << work_unit[0].readInfo->pos << "\n";
+			//std::cout << work_unit[0].readInfo->pos << "\n";
 
 			uint64_t t1 = GetTimeMs64();
 			for (size_t j = 0; j < work_unit.size(); j++){
@@ -290,8 +295,8 @@ void process_file(char *filename) {
 //                    continue;
 					// check if the call has sufficient accuracy (family, genus, species, etc.) or if
                     // the maximum length has been reached. if so, write output and flag as classified
-                    //bool tax_call = check_tax_level(call, "genus", Parent_map, taxLevel_map);
-                    bool tax_call = false;
+                    bool tax_call = check_tax_level(call, "genus", Parent_map, taxLevel_map);
+//                    bool tax_call = false;
 
 					if (tax_call || work_unit[j].readInfo->pos >= length){
 						seq_count++;
@@ -364,9 +369,9 @@ void incremental_classify_sequence(DNASequence &dna, uint32_t &call) {
 
 	uint64_t *kmer_ptr;
 	uint32_t taxon = 0;
-	uint32_t hits = 0;
+	//uint32_t hits = 0;
 
-	std::unordered_map<uint32_t, uint32_t> hit_counts;
+//	std::unordered_map<uint32_t, uint32_t> hit_counts;
 	uint64_t current_bin_key;
 	int64_t current_min_pos = 1;
 	int64_t current_max_pos = 0;
@@ -386,13 +391,13 @@ void incremental_classify_sequence(DNASequence &dna, uint32_t &call) {
             taxon = 0;
 //			dna.readInfo->taxon = 0;
 			if (scanner.ambig_kmer()) {
-//				dna.readInfo->ambig_list.push_back(1);
-                ambig_list.push_back(1);
+				dna.readInfo->ambig_list.push_back(1);
+//                ambig_list.push_back(1);
 				//std::cout << "a ";
 			}
 			else {
-//				dna.readInfo->ambig_list.push_back(0);
-				ambig_list.push_back(0);
+				dna.readInfo->ambig_list.push_back(0);
+//				ambig_list.push_back(0);
 				uint32_t *val_ptr = Database.kmer_query(
 						Database.canonical_representation(*kmer_ptr),
 						//&dna.readInfo->current_bin_key,
@@ -405,31 +410,31 @@ void incremental_classify_sequence(DNASequence &dna, uint32_t &call) {
 				taxon = val_ptr ? *val_ptr : 0;
 
 				//std::cout << dna.readInfo->taxon << " ";
-/*				if (dna.readInfo->taxon) {
-					dna.readInfo->hit_counts[dna.readInfo->taxon]++;
+				if (taxon) {
+					dna.readInfo->hit_counts[taxon]++;
 					if (Quick_mode && ++dna.readInfo->hits >= Minimum_hit_count)
 						break;
-				}*/
+				}
 
-				if (taxon) {
+/*				if (taxon) {
 					hit_counts[taxon]++;
 					if (Quick_mode && ++hits >= Minimum_hit_count)
 						break;
-				}
+				}*/
 			}
 
-//			dna.readInfo->last_kmer = *kmer_ptr;
-//			dna.readInfo->last_ambig = scanner.get_ambig();
-//			dna.readInfo->taxa.push_back(dna.readInfo->taxon);
-            taxa.push_back(taxon);
+			dna.readInfo->last_kmer = *kmer_ptr;
+			dna.readInfo->last_ambig = scanner.get_ambig();
+			dna.readInfo->taxa.push_back(dna.readInfo->taxon);
+//            taxa.push_back(taxon);
 		}
 
         if (Quick_mode)
-			call = hits >= Minimum_hit_count ? taxon : 0;
-//            call = dna.readInfo->hits >= Minimum_hit_count ? dna.readInfo->taxon : 0;
+//			call = hits >= Minimum_hit_count ? taxon : 0;
+            call = dna.readInfo->hits >= Minimum_hit_count ? dna.readInfo->taxon : 0;
         else{
-			call = resolve_tree2(hit_counts, Parent_map);
-//            call = resolve_tree2(dna.readInfo->hit_counts, Parent_map);
+//			call = resolve_tree2(hit_counts, Parent_map);
+            call = resolve_tree2(dna.readInfo->hit_counts, Parent_map);
         }
 
 		//std::cout << "\n";
