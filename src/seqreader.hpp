@@ -42,13 +42,8 @@ struct SeqClassifyInfo{
 	std::vector<uint8_t> ambig_list;
 	std::unordered_map<uint32_t, uint32_t> hit_counts;
 
-	uint64_t current_bin_key;
-	int64_t current_min_pos = 1;
-	int64_t current_max_pos = 0;
-
 	uint16_t pos = 0;
 	uint32_t hits = 0;  // only maintained if in quick mode
-	uint32_t taxon = 0;
 	uint32_t last_ambig = 0;
 	uint64_t last_kmer = 0;
 	uint16_t processed_len = 0;
@@ -61,7 +56,6 @@ struct SeqClassifyInfo{
 	    ar & ambig_list;
 	    ar & hit_counts;
 	    ar & hits;
-	    ar & taxon;
 	}
 };
 
@@ -103,16 +97,36 @@ struct DNASequence{
 	std::string seq;
 	std::string quals;
 
+	bool block_end = false;
+
 	// only used for BCL reader, otherwise null
 	std::shared_ptr<SeqClassifyInfo> readInfo;
 	std::shared_ptr<RunInfoContainer> runContainer;
 };
+
+typedef std::vector<DNASequence> WorkUnit;
 
 
 class DNASequenceReader {
 public:
 	virtual DNASequence next_sequence() = 0;
 	virtual bool is_valid() = 0;
+
+	virtual size_t next_workunit(size_t work_nt_size, WorkUnit& work_unit) {
+		size_t total_nt = 0;
+		while (total_nt < work_nt_size){
+			DNASequence dna = this->next_sequence();
+			if (!this->is_valid() || dna.seq.empty()){
+				break;
+			}
+
+			work_unit.push_back(dna);
+			total_nt += dna.seq.size();
+		}
+
+		return total_nt;
+	}
+
 	virtual ~DNASequenceReader() {}
 };
 

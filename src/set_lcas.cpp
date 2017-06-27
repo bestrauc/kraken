@@ -42,8 +42,8 @@ string DB_filename, Index_filename, Nodes_filename,
 bool Allow_extra_kmers = false;
 bool Operate_in_RAM = false;
 bool One_FASTA_file = false;
-map<uint32_t, uint32_t> Parent_map;
-map<uint32_t, string> tax_map;
+std::unordered_map<uint32_t, uint32_t> Parent_map;
+std::unordered_map<uint32_t, string> tax_map;
 map<string, uint32_t> ID_to_taxon_map;
 KrakenDB Database;
 

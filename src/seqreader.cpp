@@ -225,15 +225,12 @@ bool scanTile(int tile_num, const fs::path &tile_path, TRunInfoList &runInfoList
 	bool old_runinfo = true;
 	// If runInfo is not yet initialized, resize it and insert .
 	if (runInfoList.size() != N){
-		//std::cout << "NO RELOAD\n";
 		runInfoList.resize(N);
 		old_runinfo = false;
 		runInfo->runsize = N;
-		//std::cout << N << "\n";
 	}
 
-	//else
-	//	std::cout << "RELOAD\n";
+	//std::cout << "Dabbel free waaaht!?\n";
 
 	// Variables for timing measurement. (On one line to comment it out easily.)
 	uint64_t t1=0, t2=0, read_time=0, process_time=0;
@@ -348,7 +345,6 @@ void BCLReader::init(string filename){
 	//fileManager.cyclePaths.size()
 }
 
-
 //BCLReader::BCLReader(string file_name)
 //: fileManager(file_name, 0, 2316) {
 //	this->init(file_name);
@@ -358,7 +354,6 @@ BCLReader::BCLReader(string file_name, int length, int max_tile)
 : fileManager(file_name, length, max_tile), process_status(0) {//, writerThread(&BCLReader::saveRunInfo, this) {
 	this->init(file_name);
 }
-
 
 DNASequence BCLReader::next_sequence() {
 	DNASequence dna;
@@ -418,7 +413,7 @@ DNASequence BCLReader::next_sequence() {
 		// Get buffered reads.
 		sequenceBuffer = std::move(concurrentBufferQueue.pop()); // this is blocking
 
-		//LOG(std::cout << "Found buffer. Size: " << sequenceBuffer->size() << "\n");
+		//LOG("Found buffer. Size: " << sequenceBuffer->size() << "\n");
 
 		// After consuming a buffer from the queue, spawn a new sequence reader.
 		if (_valid){
@@ -429,6 +424,11 @@ DNASequence BCLReader::next_sequence() {
 
 	dna = std::move(sequenceBuffer->back());
 	sequenceBuffer->pop_back();
+
+	if (sequenceBuffer->empty()){
+		//std::cout << "Block end\n";
+		dna.block_end = true;
+	}
 
 	// deal with invalid sequences
 	/*{
@@ -460,13 +460,12 @@ bool BCLReader::is_valid() {
 // Each call of this function will advance the tile number. If all
 // If all tiles in a lane are processed, will continue with tile 1 of next lane.
 bool BCLReader::fillSequenceBuffer(){
-
-	//std::cout << "Manager?\n";
-
+	// get the next tile number
 	TileInfo tile = fileManager.getTile();
 
 	// If we are at the end.
 	if (!fileManager.is_valid()){
+		std::cout << "At end\n";
 		_valid = false;
 		return false;
 	}
@@ -484,7 +483,7 @@ bool BCLReader::fillSequenceBuffer(){
 // Creates a new sequence buffer, fills it with reads from the tile numbered
 // "tile_num" and adds it to the Queue of buffers which Kraken consumes.
 void BCLReader::addSequenceBuffer(TileInfo tile){
-	//LOG("Entered addSequenceBuffer " << std::cout << tile.lane_num << " " << tile.tile_num << "\n");
+	//LOG("Entered addSequenceBuffer " << tile.lane_num << " " << tile.tile_num << "\n");
 	// Create new buffer to hold the reads.
 	std::unique_ptr<TDNABuffer> buffer(new TDNABuffer());
 	// std::shared_ptr<RunInfoContainer> runInfo(new RunInfoContainer(tile.lane_num, tile.tile_num, tile.last_cycle));
@@ -545,7 +544,7 @@ void BCLReader::addSequenceBuffer(TileInfo tile){
 	//std::vector<bool> tile_filter;
 	//scanFilter(fs::path(s), tile_filter);
 
-	//std::cout << "Filling sequence buffer.\n";
+	//std::cout << "Filling sequence buffer: " << tile.first_cycle << " .. " << tile.last_cycle << "\n";
 
 	// Process current tile in each cycle directory.
 	for (int i=tile.first_cycle; i < tile.last_cycle; ++i){
@@ -563,7 +562,7 @@ void BCLReader::addSequenceBuffer(TileInfo tile){
 	// (It is a concurrent queue, so multiple threads can access it.)
 	concurrentBufferQueue.push(std::move(buffer));
 	//concurrentRunInfoQueue.push(runInfoMap[tile.lane_num][tile.tile_num]);
-	//LOG("Ended addSequenceBuffer" << tile.tile_num << "\n");
+	//LOG("Ended addSequenceBuffer " << tile.tile_num << "\n");
 }
 
 void BCLReader::saveRunInfo(){

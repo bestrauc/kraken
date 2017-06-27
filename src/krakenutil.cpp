@@ -40,6 +40,7 @@ unordered_map<uint32_t, uint32_t> build_parent_map(string filename, unordered_ma
 			break;
 		sscanf(line.c_str(), "%d\t|\t%d\t|\t%s", &node_id, &parent_id, tax);
 		pmap[node_id] = parent_id;
+
 		taxLevel_map[node_id] = string(tax);
 		//std::cout << node_id << " " << parent_id << " " << string(tax) << "|\n";
 	}

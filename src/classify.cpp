@@ -212,7 +212,7 @@ void process_file(char *filename) {
 	else
 		reader = new BCLReader(file_str, length, max_tile);
 
-	uint64_t read_time=0, process_time=0;
+	uint64_t tax_level_time=0, read_time=0, process_time=0;
 	//uint64_t total = 0;
 
 	// save a log of the classifications at each iteration
@@ -222,9 +222,9 @@ void process_file(char *filename) {
 //	std::cout << "Before start\n";
 
 	//uint64_t t = GetTimeMs64();
-	#pragma omp parallel reduction(+:read_time, process_time)
+	#pragma omp parallel reduction(+:read_time, process_time, tax_level_time)
 	{
-		vector<DNASequence> work_unit;
+		WorkUnit work_unit;
 		ostringstream kraken_output_ss, classified_output_ss, unclassified_output_ss;
 
 		while (reader->is_valid()) {
@@ -233,14 +233,16 @@ void process_file(char *filename) {
 			#pragma omp critical(get_input)
 			{
 				uint64_t t1 = GetTimeMs64();
-				while (total_nt < Work_unit_size) {
-					dna = reader->next_sequence();
-					if (! reader->is_valid() || dna.seq.empty()){
-						break;
-					}
-					work_unit.push_back(dna);
-					total_nt += dna.seq.size();
-				}
+				std::cout << "Before workunit\n";
+				total_nt = reader->next_workunit(Work_unit_size, work_unit);
+//				while (total_nt < Work_unit_size) {
+//					dna = reader->next_sequence();
+//					if (!reader->is_valid() || dna.seq.empty()){
+//						break;
+//					}
+//					work_unit.push_back(dna);
+//					total_nt += dna.seq.size();
+//				}
 
 				read_time += (GetTimeMs64() - t1);
 			}
@@ -295,8 +297,10 @@ void process_file(char *filename) {
 //                    continue;
 					// check if the call has sufficient accuracy (family, genus, species, etc.) or if
                     // the maximum length has been reached. if so, write output and flag as classified
-                    bool tax_call = check_tax_level(call, "genus", Parent_map, taxLevel_map);
-//                    bool tax_call = false;
+					uint64_t ttax = GetTimeMs64();
+//                    bool tax_call = check_tax_level(call, "genus", Parent_map, taxLevel_map);
+                    bool tax_call = false;
+                    tax_level_time += (GetTimeMs64() - ttax);
 
 					if (tax_call || work_unit[j].readInfo->pos >= length){
 						seq_count++;
@@ -355,7 +359,7 @@ void process_file(char *filename) {
 		std::cout << "Sum: " << sum << std::endl;
 	}*/
 
-	std::cout << "Read: " << read_time << ", Process: " << process_time << "\n";
+	std::cout << "Read: " << read_time << ", Process: " << process_time << ", Tax Level: " << tax_level_time << "\n";
 
 	//for (auto a: classified_count)
 	//	std::cout << a.first << " " << a.second << "\n";
@@ -369,35 +373,22 @@ void incremental_classify_sequence(DNASequence &dna, uint32_t &call) {
 
 	uint64_t *kmer_ptr;
 	uint32_t taxon = 0;
-	//uint32_t hits = 0;
 
-//	std::unordered_map<uint32_t, uint32_t> hit_counts;
 	uint64_t current_bin_key;
 	int64_t current_min_pos = 1;
 	int64_t current_max_pos = 0;
 
-	//std::cout << dna.seq.size() << " " << (int)Database.get_k() << "\n";
-
-	//dna.readInfo->
-
 	if (!dna.readInfo->first || dna.seq.size() >= Database.get_k()) {
-		//std::cout << "HERE\n";
-		//std::cout << dna.seq << "\n";
 		KmerScanner scanner(dna.seq, 0, ~0, !dna.readInfo->first, dna.readInfo->last_ambig, dna.readInfo->last_kmer);
 		//KmerScanner scanner(dna.seq);
 //		int c_i=0;
 		while ((kmer_ptr = scanner.next_kmer()) != NULL) {
-			//std::cout << "While " << ++c_i << " " << dna.readInfo->first << " " << dna.readInfo->last_kmer << " " << dna.seq << "\n";
-            taxon = 0;
-//			dna.readInfo->taxon = 0;
+			taxon = 0;
 			if (scanner.ambig_kmer()) {
 				dna.readInfo->ambig_list.push_back(1);
-//                ambig_list.push_back(1);
-				//std::cout << "a ";
 			}
 			else {
 				dna.readInfo->ambig_list.push_back(0);
-//				ambig_list.push_back(0);
 				uint32_t *val_ptr = Database.kmer_query(
 						Database.canonical_representation(*kmer_ptr),
 						//&dna.readInfo->current_bin_key,
@@ -406,38 +397,25 @@ void incremental_classify_sequence(DNASequence &dna, uint32_t &call) {
 						&current_min_pos, &current_max_pos
 				);
 
-//				dna.readInfo->taxon = val_ptr ? *val_ptr : 0;
 				taxon = val_ptr ? *val_ptr : 0;
 
-				//std::cout << dna.readInfo->taxon << " ";
 				if (taxon) {
 					dna.readInfo->hit_counts[taxon]++;
 					if (Quick_mode && ++dna.readInfo->hits >= Minimum_hit_count)
 						break;
 				}
-
-/*				if (taxon) {
-					hit_counts[taxon]++;
-					if (Quick_mode && ++hits >= Minimum_hit_count)
-						break;
-				}*/
 			}
 
 			dna.readInfo->last_kmer = *kmer_ptr;
 			dna.readInfo->last_ambig = scanner.get_ambig();
-			dna.readInfo->taxa.push_back(dna.readInfo->taxon);
-//            taxa.push_back(taxon);
+			dna.readInfo->taxa.push_back(taxon);
 		}
 
         if (Quick_mode)
-//			call = hits >= Minimum_hit_count ? taxon : 0;
-            call = dna.readInfo->hits >= Minimum_hit_count ? dna.readInfo->taxon : 0;
+            call = dna.readInfo->hits >= Minimum_hit_count ? taxon : 0;
         else{
-//			call = resolve_tree2(hit_counts, Parent_map);
             call = resolve_tree2(dna.readInfo->hit_counts, Parent_map);
         }
-
-		//std::cout << "\n";
 
 		dna.readInfo->first = false;
 	}
