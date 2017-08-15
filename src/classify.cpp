@@ -35,10 +35,7 @@ void usage(int exit_code = EX_USAGE);
 void process_file(char *filename);
 
 int classify_sequence(DNASequence &dna, ostringstream &koss,
-                       ostringstream &coss, ostringstream &uoss);
-
-void classify_full_sequence(DNASequence &dna, ostringstream &koss,
-                       ostringstream &coss, ostringstream &uoss);
+                      ostringstream &coss, ostringstream &uoss);
 
 void classify_partial_sequence(DNASequence &dna, uint32_t &call);
 
@@ -230,7 +227,7 @@ void process_file(char *filename) {
     std::map<int, std::map<int, int> > classified_count;
 
     //uint64_t t = GetTimeMs64();
-    #pragma omp parallel reduction(+:read_time, process_time, tax_level_time)
+#pragma omp parallel reduction(+:read_time, process_time, tax_level_time)
     {
         WorkUnit work_unit;
         ostringstream kraken_output_ss, classified_output_ss, unclassified_output_ss;
@@ -238,7 +235,7 @@ void process_file(char *filename) {
         while (reader->is_valid()) {
             work_unit.clear();
             size_t total_nt = 0;
-            #pragma omp critical(get_input)
+#pragma omp critical(get_input)
             {
                 uint64_t t1 = GetTimeMs64();
                 total_nt = reader->next_workunit(Work_unit_size, work_unit);
@@ -261,7 +258,8 @@ void process_file(char *filename) {
 
             uint64_t t1 = GetTimeMs64();
             for (size_t j = 0; j < work_unit.size(); j++) {
-                seq_count += classify_sequence(work_unit[j], kraken_output_ss, classified_output_ss, unclassified_output_ss);
+                seq_count += classify_sequence(work_unit[j], kraken_output_ss,
+                                               classified_output_ss, unclassified_output_ss);
             }
 
             process_time += (GetTimeMs64() - t1);
@@ -287,40 +285,22 @@ void process_file(char *filename) {
 }
 
 int classify_sequence(DNASequence &dna, ostringstream &koss,
-                       ostringstream &coss, ostringstream &uoss) {
+                      ostringstream &coss, ostringstream &uoss) {
     int seq_count = 0;
-    // if fasta or fastq - classify directly and output
-    if (File_input != BCL) {
-        classify_full_sequence(dna, koss, coss, uoss);
-        return 0;
-    } else {
-        // if we have classified this sequence at a sufficient
-        // taxonomic (family, genus, etc.) level already, skip it
-        if (dna.readInfo->skip) {
-//            work_unit[j].runContainer->increment_count();
-            return 0;
-        }
+    uint32_t call = 0;
 
-        uint32_t call = 0;
+    // classify the sequence we're given
+    classify_partial_sequence(dna, call);
 
+    // we can finalize if: Full fasta or fastq sequence given and called
+    // or if the BCL file was sufficiently accurately classified
+//    classify_finalize(dna, koss, coss, uoss, call);
+    bool tax_call = check_tax_level(call, "genus", Parent_map, taxLevel_map);
 
-        // classify this subsequence and store classification at this length
-//        classify_sequence(work_unit[j], kraken_output_ss,
-//                          classified_output_ss, unclassified_output_ss);
-        classify_partial_sequence(dna, call);
-
-        // check if the call has sufficient accuracy (family, genus, species, etc.) or if
-        // the maximum length has been reached. if so, write output and flag as classified
-        uint64_t ttax = GetTimeMs64();
-//        bool tax_call = check_tax_level(call, "genus", Parent_map, taxLevel_map);
-        bool tax_call = false;
-//        tax_level_time += (GetTimeMs64() - ttax);
-
-        if (tax_call || dna.readInfo->pos >= length) {
-            seq_count++;
-            dna.readInfo->skip = true;
-            classify_finalize(dna, koss, coss, uoss, call);
-        }
+    if (!dna.runContainer || tax_call || dna.readInfo->pos >= length) {
+        seq_count = (File_input == BCL);
+        dna.readInfo->skip = true;
+        classify_finalize(dna, koss, coss, uoss, call);
     }
 
     return seq_count;
@@ -337,6 +317,7 @@ void classify_partial_sequence(DNASequence &dna, uint32_t &call) {
     int64_t current_min_pos = 1;
     int64_t current_max_pos = 0;
 
+    // check !first because k-mer size requirement may not hold for incremental steps
     if (!dna.readInfo->first || dna.seq.size() >= Database.get_k()) {
         KmerScanner scanner(dna.seq, 0, ~0, !dna.readInfo->first, dna.readInfo->last_ambig,
                             dna.readInfo->last_kmer);
@@ -426,96 +407,6 @@ void classify_finalize(DNASequence &dna, ostringstream &koss,
     koss << endl;
 }
 
-void classify_full_sequence(DNASequence &dna, ostringstream &koss,
-                       ostringstream &coss, ostringstream &uoss) {
-    vector<uint32_t> taxa;
-    vector<uint8_t> ambig_list;
-    std::unordered_map<uint32_t, uint32_t> hit_counts;
-    uint64_t *kmer_ptr;
-    uint32_t taxon = 0;
-    uint32_t hits = 0;  // only maintained if in quick mode
-
-    uint64_t current_bin_key;
-    int64_t current_min_pos = 1;
-    int64_t current_max_pos = 0;
-
-    if (dna.seq.size() >= Database.get_k()) {
-        //std::cout << dna.seq.size() << " - " << (int)Database.get_k() << "\n";
-        KmerScanner scanner(dna.seq);
-        while ((kmer_ptr = scanner.next_kmer()) != NULL) {
-            taxon = 0;
-            if (scanner.ambig_kmer()) {
-                ambig_list.push_back(1);
-            } else {
-                ambig_list.push_back(0);
-                uint32_t *val_ptr = Database.kmer_query(
-                        Database.canonical_representation(*kmer_ptr),
-                        &current_bin_key,
-                        &current_min_pos, &current_max_pos
-                );
-                taxon = val_ptr ? *val_ptr : 0;
-                if (taxon) {
-                    hit_counts[taxon]++;
-                    if (Quick_mode && ++hits >= Minimum_hit_count)
-                        break;
-                }
-            }
-            taxa.push_back(taxon);
-        }
-    }
-
-    uint32_t call = 0;
-    if (Quick_mode)
-        call = hits >= Minimum_hit_count ? taxon : 0;
-    else
-        call = resolve_tree2(hit_counts, Parent_map);
-
-    //std::cout << "Called? " << call << "\n";
-
-    if (call)
-#pragma omp atomic
-        total_classified++;
-
-    if (Print_unclassified || Print_classified) {
-        ostringstream *oss_ptr = call ? &coss : &uoss;
-        bool print = call ? Print_classified : Print_unclassified;
-        if (print) {
-            if (File_input == FASTQ) {
-                (*oss_ptr) << "@" << dna.header_line << endl
-                           << dna.seq << endl
-                           << "+" << endl
-                           << dna.quals << endl;
-            } else {
-                (*oss_ptr) << ">" << dna.header_line << endl
-                           << dna.seq << endl;
-            }
-        }
-    }
-
-    if (!Print_kraken)
-        return;
-
-    if (call) {
-        koss << "C\t";
-    } else {
-        if (Only_classified_kraken_output)
-            return;
-        koss << "U\t";
-    }
-
-    koss << dna.id << "\t" << call << "\t" << dna.seq.size() << "\t";
-
-    if (Quick_mode) {
-        koss << "Q:" << hits;
-    } else {
-        if (taxa.empty())
-            koss << "0:0";
-        else
-            koss << hitlist_string(taxa, ambig_list);
-    }
-
-    koss << endl;
-}
 
 string hitlist_string(vector<uint32_t> &taxa, vector<uint8_t> &ambig) {
     int64_t last_code;

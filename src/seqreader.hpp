@@ -97,10 +97,10 @@ struct DNASequence{
 	std::string seq;
 	std::string quals;
 
-	bool block_end = false;
+	bool block_end;
 
 	// only used for BCL reader, otherwise null
-	std::shared_ptr<SeqClassifyInfo> readInfo;
+	std::shared_ptr<SeqClassifyInfo> readInfo = std::make_shared<SeqClassifyInfo>();
 	std::shared_ptr<RunInfoContainer> runContainer;
 };
 

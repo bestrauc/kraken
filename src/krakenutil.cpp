@@ -50,6 +50,7 @@ unordered_map<uint32_t, uint32_t> build_parent_map(string filename, unordered_ma
 
 // check if the call corresponds to at least the taxon level ("genus" etc.) required
 bool check_tax_level(uint32_t call, string level, unordered_map<uint32_t, uint32_t> & parent_map, unordered_map<uint32_t, string> &taxLevel_map){
+    return false;
 	// check the taxonomic ancestors of the call
 	while ((call!=0) && (taxLevel_map[call] != level)){
 		call = parent_map[call];
