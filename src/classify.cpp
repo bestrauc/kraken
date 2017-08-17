@@ -21,6 +21,7 @@
 #include "krakendb.hpp"
 #include "krakenutil.hpp"
 #include "quickfile.hpp"
+#include <unordered_set>
 //#include "seqreader.hpp"
 
 const size_t DEF_WORK_UNIT_SIZE = 500000;
@@ -34,8 +35,8 @@ void usage(int exit_code = EX_USAGE);
 
 void process_file(char *filename);
 
-int classify_sequence(DNASequence &dna, ostringstream &koss,
-                      ostringstream &coss, ostringstream &uoss);
+void classify_sequence(DNASequence &dna, ostringstream &koss, ostringstream &coss, ostringstream &uoss,
+                       uint64_t &seq_count);
 
 void classify_partial_sequence(DNASequence &dna, uint32_t &call);
 
@@ -205,6 +206,31 @@ void report_stats(struct timeval time1, struct timeval time2) {
             (total_sequences - total_classified) * 100.0 / total_sequences);
 }
 
+void check_workunit(WorkUnit &unit){
+    std::unordered_set<int> lengths;
+    std::unordered_set<int> poses;
+    std::unordered_set<std::shared_ptr<RunInfoContainer> > pointers;
+
+    for (auto& dna: unit){
+        lengths.insert(dna.seq.size());
+        poses.emplace(dna.readInfo->pos);
+        pointers.insert(dna.runContainer);
+    }
+
+    std::cout << "Found sizes: \n";
+    for (const auto &elem : lengths)
+        std::cout << elem << " ";
+
+    std::cout << "\nFound poses: \n";
+    for (const auto &elem : poses)
+        std::cout << elem << " ";
+
+    std::cout << "\nFound pointers: \n";
+    for (const auto &elem : pointers)
+        std::cout << elem << " ";
+    std::cout << "\n";
+}
+
 void process_file(char *filename) {
     string file_str(filename);
     DNASequenceReader *reader;
@@ -239,7 +265,6 @@ void process_file(char *filename) {
             {
                 uint64_t t1 = GetTimeMs64();
                 total_nt = reader->next_workunit(Work_unit_size, work_unit);
-
                 read_time += (GetTimeMs64() - t1);
             }
 
@@ -252,19 +277,33 @@ void process_file(char *filename) {
 
             // sequence count for this batch of reads
             // for BCL files, count individually
-            uint64_t seq_count = (File_input != BCL) ? work_unit.size() : 0;
+            uint64_t seq_count = 0; //= (File_input != BCL) ? work_unit.size() : 0;
 
-            std::cout << work_unit.size();
+            std::cout << "Work unit size: " << work_unit.size() << "\n";
+            std::cout << "Sequence length: " << work_unit[0].seq.size() << " to " << work_unit.back().seq.size() << "\n";
+
+            check_workunit(work_unit);
+
+            uint64_t count_pos = 0;
 
             uint64_t t1 = GetTimeMs64();
             for (size_t j = 0; j < work_unit.size(); j++) {
-                seq_count += classify_sequence(work_unit[j], kraken_output_ss,
-                                               classified_output_ss, unclassified_output_ss);
+                bool full_length = work_unit[j].readInfo->pos >= length;
+                int last_size = work_unit[j].seq.size();
+                count_pos += full_length;
+
+                classify_sequence(work_unit[j], kraken_output_ss, classified_output_ss,
+                                  unclassified_output_ss, seq_count);
             }
+
+            std::cout << count_pos << " counted.\n";
+
+//            std::cout << seq_count << " of " << work_unit.size() << " at iteration " <<
+//                      work_unit[0].readInfo->pos << " - " << work_unit.back().readInfo->pos << "\n";
 
             process_time += (GetTimeMs64() - t1);
 
-            #pragma omp critical(write_output)
+#pragma omp critical(write_output)
             {
                 if (Print_kraken)
                     (*Kraken_output) << kraken_output_ss.str();
@@ -272,7 +311,7 @@ void process_file(char *filename) {
                     (*Classified_output) << classified_output_ss.str();
                 if (Print_unclassified)
                     (*Unclassified_output) << unclassified_output_ss.str();
-                total_sequences += seq_count;
+                total_sequences += count_pos; //seq_count;
                 total_bases += total_nt;
                 cerr << "\rProcessed " << total_sequences << " sequences (" << total_bases << " bp) ...\n";
             }
@@ -284,9 +323,8 @@ void process_file(char *filename) {
     delete reader;
 }
 
-int classify_sequence(DNASequence &dna, ostringstream &koss,
-                      ostringstream &coss, ostringstream &uoss) {
-    int seq_count = 0;
+void classify_sequence(DNASequence &dna, ostringstream &koss, ostringstream &coss, ostringstream &uoss,
+                       uint64_t &seq_count) {
     uint32_t call = 0;
 
     // classify the sequence we're given
@@ -294,16 +332,16 @@ int classify_sequence(DNASequence &dna, ostringstream &koss,
 
     // we can finalize if: Full fasta or fastq sequence given and called
     // or if the BCL file was sufficiently accurately classified
-//    classify_finalize(dna, koss, coss, uoss, call);
     bool tax_call = check_tax_level(call, "genus", Parent_map, taxLevel_map);
 
     if (!dna.runContainer || tax_call || dna.readInfo->pos >= length) {
-        seq_count = (File_input == BCL);
+//        std::cout << "Entering because " << !dna.runContainer << " " << tax_call << " " <<
+//                  dna.readInfo->pos << "\n";
+//        seq_count += (File_input == BCL);
+        seq_count++;
         dna.readInfo->skip = true;
         classify_finalize(dna, koss, coss, uoss, call);
     }
-
-    return seq_count;
 }
 
 void classify_partial_sequence(DNASequence &dna, uint32_t &call) {

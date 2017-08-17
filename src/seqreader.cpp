@@ -544,15 +544,14 @@ void BCLReader::addSequenceBuffer(TileInfo tile){
 	//std::vector<bool> tile_filter;
 	//scanFilter(fs::path(s), tile_filter);
 
-	//std::cout << "Filling sequence buffer: " << tile.first_cycle << " .. " << tile.last_cycle << "\n";
+	std::cout << "Filling sequence buffer: " << tile.first_cycle << " .. " << tile.last_cycle << "\n";
 
 	// Process current tile in each cycle directory.
 	for (int i=tile.first_cycle; i < tile.last_cycle; ++i){
 		std::string s(fileManager.cyclePaths[tile.lane_num-1][i].string() + tile_str + ".bcl");
-		std::cout << s << "\n";
+//		std::cout << s << "\n";
 
 		// Add bases of tile in the current cycle to the buffered reads.
-		//if (scanTile(tile.tile_num, fs::path(s), runMap[tile.lane_num][tile.tile_num], runInfo, buffer) == false){
 		if (scanTile(tile.tile_num, fs::path(s), runMap[tile.lane_num][tile.tile_num], runInfoMap[tile.lane_num][tile.tile_num], buffer) == false){
 			_valid = false;
 		}
