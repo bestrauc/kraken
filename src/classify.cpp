@@ -214,7 +214,7 @@ void check_workunit(WorkUnit &unit){
     for (auto& dna: unit){
         lengths.insert(dna.seq.size());
         poses.emplace(dna.readInfo->pos);
-        pointers.insert(dna.runContainer);
+//        pointers.insert(dna.runContainer);
     }
 
     std::cout << "Found sizes: \n";
@@ -225,10 +225,10 @@ void check_workunit(WorkUnit &unit){
     for (const auto &elem : poses)
         std::cout << elem << " ";
 
-    std::cout << "\nFound pointers: \n";
+/*    std::cout << "\nFound pointers: \n";
     for (const auto &elem : pointers)
         std::cout << elem << " ";
-    std::cout << "\n";
+    std::cout << "\n";*/
 }
 
 void process_file(char *filename) {
@@ -282,26 +282,19 @@ void process_file(char *filename) {
             std::cout << "Work unit size: " << work_unit.size() << "\n";
             std::cout << "Sequence length: " << work_unit[0].seq.size() << " to " << work_unit.back().seq.size() << "\n";
 
-            check_workunit(work_unit);
-
-            uint64_t count_pos = 0;
+//            check_workunit(work_unit);
 
             uint64_t t1 = GetTimeMs64();
             for (size_t j = 0; j < work_unit.size(); j++) {
-                bool full_length = work_unit[j].readInfo->pos >= length;
-                int last_size = work_unit[j].seq.size();
-                count_pos += full_length;
-
                 classify_sequence(work_unit[j], kraken_output_ss, classified_output_ss,
                                   unclassified_output_ss, seq_count);
             }
 
-            std::cout << count_pos << " counted.\n";
+            if (work_unit[0].runContainer){
+                work_unit[0].runContainer->increment_count(work_unit.size());
+            }
 
-//            std::cout << seq_count << " of " << work_unit.size() << " at iteration " <<
-//                      work_unit[0].readInfo->pos << " - " << work_unit.back().readInfo->pos << "\n";
-
-            process_time += (GetTimeMs64() - t1);
+           process_time += (GetTimeMs64() - t1);
 
 #pragma omp critical(write_output)
             {
@@ -311,7 +304,7 @@ void process_file(char *filename) {
                     (*Classified_output) << classified_output_ss.str();
                 if (Print_unclassified)
                     (*Unclassified_output) << unclassified_output_ss.str();
-                total_sequences += count_pos; //seq_count;
+                total_sequences += seq_count;
                 total_bases += total_nt;
                 cerr << "\rProcessed " << total_sequences << " sequences (" << total_bases << " bp) ...\n";
             }
@@ -335,9 +328,6 @@ void classify_sequence(DNASequence &dna, ostringstream &koss, ostringstream &cos
     bool tax_call = check_tax_level(call, "genus", Parent_map, taxLevel_map);
 
     if (!dna.runContainer || tax_call || dna.readInfo->pos >= length) {
-//        std::cout << "Entering because " << !dna.runContainer << " " << tax_call << " " <<
-//                  dna.readInfo->pos << "\n";
-//        seq_count += (File_input == BCL);
         seq_count++;
         dna.readInfo->skip = true;
         classify_finalize(dna, koss, coss, uoss, call);

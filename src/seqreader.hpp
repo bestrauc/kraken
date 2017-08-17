@@ -59,11 +59,11 @@ struct SeqClassifyInfo{
 	}
 };
 
-typedef std::vector<std::shared_ptr<SeqClassifyInfo> > TRunInfoList;
+typedef std::vector<std::shared_ptr<SeqClassifyInfo> > TSeqClassifyInfoList;
 
 struct RunInfoContainer{
-	//TRunInfoList runInfoList;
-	unsigned runsize;
+	//TSeqClassifyInfoList runInfoList;
+	uint64_t runsize;
 
 	RunInfoContainer() :
 			count(0), lane_num(0), tile_num(0), processed_nt(0) {	};
@@ -73,22 +73,26 @@ struct RunInfoContainer{
 		//processing_lock.lock(); // lock writing until all sequences have been read
 	};
 
-	std::atomic_uint count;
+	std::atomic<std::uint64_t> count;
 	std::mutex  processing_lock;
 
 	int lane_num;
 	int tile_num;
 	int processed_nt = 0;
 
-	void increment_count(){
-		++count; // atomic increase
-		//std::cout << count << " " << runsize << "\n";
 
+	void increment_count(uint64_t inc){
+		count += inc; // atomic increase
+
+		std::cout << count << " " << runsize << "\n";
+
+		uint64_t runsize_compare = runsize;
 		// Release run information for writing when all information has been updated.
-		if (count == runsize)
+		// use atomic load and swap to not double unlock
+		if (count.compare_exchange_strong(runsize_compare, 0)){
 			processing_lock.unlock();
+		}
 	}
-
 };
 
 struct DNASequence{
@@ -96,8 +100,6 @@ struct DNASequence{
 	std::string header_line;  // id + optional description
 	std::string seq;
 	std::string quals;
-
-	bool block_end;
 
 	// only used for BCL reader, otherwise null
 	std::shared_ptr<SeqClassifyInfo> readInfo = std::make_shared<SeqClassifyInfo>();
@@ -112,11 +114,12 @@ public:
 	virtual DNASequence next_sequence() = 0;
 	virtual bool is_valid() = 0;
 
+	// default implementation of the workunit generation using only next_sequence
 	virtual size_t next_workunit(size_t work_nt_size, WorkUnit& work_unit) {
 		size_t total_nt = 0;
 		while (total_nt < work_nt_size){
 			DNASequence dna = this->next_sequence();
-			if (!this->is_valid() || dna.seq.empty()){
+			if (!this->is_valid()){
 				break;
 			}
 
@@ -165,7 +168,9 @@ public:
 	//BCLReader(std::string filename);
 	BCLReader(std::string filename, int length, int max_tile);
 	DNASequence next_sequence();
+    virtual size_t next_workunit(size_t work_nt_size, WorkUnit& work_unit);
 	bool is_valid();
+
 
 private:
 	// The path data structures for the lane, cycles and temporary files.
@@ -179,7 +184,7 @@ private:
 	// data structures indicating read status
 	std::vector<bool> tileFinished;
 	std::unordered_map<int, std::unordered_map<int, std::shared_ptr<RunInfoContainer> > > runInfoMap;
-	std::unordered_map<int, std::unordered_map<int, TRunInfoList> > runMap;
+	std::unordered_map<int, std::unordered_map<int, TSeqClassifyInfoList> > runMap;
 	//std::unordered_map<int, std::unordered_map<int, std::mutex> > runInfoLocks;
 
 	// A list of progress for the reads of one tile

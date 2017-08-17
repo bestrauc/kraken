@@ -198,8 +198,8 @@ bool scanFilter(const fs::path &filter_path, std::vector<bool> &tile_index){
 }
 
 // Scan the tile given in the tile_path and save sequences into the buffer
-bool scanTile(int tile_num, const fs::path &tile_path, TRunInfoList &runInfoList,
-		std::shared_ptr<RunInfoContainer> &runInfo,std::unique_ptr<BCLReader::TDNABuffer> &buffer){
+bool scanTile(int tile_num, const fs::path &tile_path, TSeqClassifyInfoList &runInfoList,
+		std::shared_ptr<RunInfoContainer> &runInfo, std::unique_ptr<BCLReader::TDNABuffer> &buffer){
 	std::ifstream in_file;
 	in_file.open(tile_path.c_str(), std::ios::in | std::ios::binary);
 
@@ -208,7 +208,7 @@ bool scanTile(int tile_num, const fs::path &tile_path, TRunInfoList &runInfoList
 		return false;
 	}
 
-	//TRunInfoList &runInfoList = runInfo->runInfoList;
+	//TSeqClassifyInfoList &runInfoList = runInfo->runInfoList;
 
 	// Process file
 	uint32_t N; // number of clusters (sequences)
@@ -355,98 +355,42 @@ BCLReader::BCLReader(string file_name, int length, int max_tile)
 	this->init(file_name);
 }
 
-DNASequence BCLReader::next_sequence() {
-	DNASequence dna;
-
-	// We can't read anything anymore and have noting buffered either -> end.
+size_t BCLReader::next_workunit(size_t work_nt_size, WorkUnit &work_unit) {
 	if (!_valid && concurrentBufferQueue.empty() && sequenceBuffer->empty()){
 		valid = false;
-		return dna;
+		return 0;
 	}
 
-	// We execute this for the first time, start a sequence reader.
+	// fill a sequence buffer if none exists
 	if (sequenceBuffer == nullptr){
-        //std::cout << "Spawning sequence reader\n";
 		fillSequenceBuffer();
-		//sequenceBuffer = std::move(concurrentBufferQueue.pop()); // this is blocking
 	}
 
-	// If the sequence buffer is empty, we get the next buffer, which
-	// should have been filled by a concurrent thread. If the next buffer
-	// is not ready yet, the function blocks there and waits for it.
-	if (sequenceBuffer == nullptr || sequenceBuffer->empty()){
-
-		// spawn a writer thread for temp information, if such information exists
-		// TODO: Ensure that writing only is done when nothing is being read (to improve IO performance)
-		// TODO: Refactor start of writer thread into own function.
-		//if (sequenceBuffer != nullptr && sequenceBuffer->empty()){
-			//saveRunInfo();
-		//}
-
-#ifdef DEBUG
-		if (concurrentBufferQueue.empty())
-			LOG("\nWaiting for buffer to be filled...\n");
-#endif
-
-		// verify that we are not waiting for the same tile
-		/*
-		if (concurrentBufferQueue.empty()){
-			// wait for confirmation about next tile being processed or not
-			std::mutex m;
-			std::unique_lock<std::mutex> lock(m);
-
-			//std::cout << process_status << "--- \n";
-
-			// while to protect from spurious wakeups
-			while (process_status == 0)
-				processing_var.wait(lock);
-
-			unsigned old_status = process_status;
-			process_status = 0;
-
-			// if the next tile cannot be processed yet, signal classify to start
-			if (old_status == 2)
-				return dna;
-		}
-		*/
-
-		// Get buffered reads.
+	// get new reads from buffer and start a new reader afterwards
+	if (sequenceBuffer == nullptr || sequenceBuffer->empty()) {
+        // Get buffered reads.
 		sequenceBuffer = std::move(concurrentBufferQueue.pop()); // this is blocking
 
-		//LOG("Found buffer. Size: " << sequenceBuffer->size() << "\n");
-
-		// After consuming a buffer from the queue, spawn a new sequence reader.
-		if (_valid){
-			//std::cout << "Spawning sequence reader\n";
+		// After consuming a buffer from the queue, spawn a new sequence reader (unless there is nothing left).
+		if (_valid) {
 			fillSequenceBuffer();
 		}
 	}
 
-	dna = std::move(sequenceBuffer->back());
-	sequenceBuffer->pop_back();
+	size_t total_nt = 0;
 
-	if (sequenceBuffer->empty()){
-		//std::cout << "Block end\n";
-		dna.block_end = true;
+	while (total_nt < work_nt_size && !sequenceBuffer->empty()){
+		work_unit.emplace_back(sequenceBuffer->back());
+		sequenceBuffer->pop_back();
+        total_nt += work_unit.back().seq.size();
 	}
 
-	// deal with invalid sequences
-	/*{
-	// If the sequence is empty, it did not pass
-	// the quality filter and will be skipped.
-	do{
-	dna = std::move(sequenceBuffer->back());
-		sequenceBuffer->pop_back();
-	} while (!sequenceBuffer->empty() && dna.seq.empty());
+	return total_nt;
+}
 
-	// If we have exhausted the remaining buffer without
-	// finding an unfiltered sequence, recursively call
-	// next_sequence to create a new buffer and search again.
-	if (sequenceBuffer->empty() && dna.seq.empty())
-		return this->next_sequence();
-	}*/
-
-	//std::cout << sequenceBuffer->size() << " - \n";
+// TODO: Not implemented for BCLReader. Use next_workunit to load whole tiles for use in classify.cpp.
+DNASequence BCLReader::next_sequence() {
+	DNASequence dna;
 
 	return dna;
 }
@@ -491,6 +435,12 @@ void BCLReader::addSequenceBuffer(TileInfo tile){
 
 	if (runInfoMap[tile.lane_num][tile.tile_num] == nullptr)
 		runInfoMap[tile.lane_num][tile.tile_num] = std::make_shared<RunInfoContainer>(tile.lane_num, tile.tile_num, tile.last_cycle);
+
+
+    if (!runInfoMap[tile.lane_num][tile.tile_num]->processing_lock.try_lock()){
+		std::cout << "Waiting for last tile \n";
+		runInfoMap[tile.lane_num][tile.tile_num]->processing_lock.lock();
+	}
 
 	/*
 	// is the tile we about to read more bases from scheduled for processing?
