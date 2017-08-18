@@ -21,6 +21,7 @@
 #include "krakendb.hpp"
 #include "krakenutil.hpp"
 #include "quickfile.hpp"
+#include "seqreader.hpp"
 #include <unordered_set>
 //#include "seqreader.hpp"
 
@@ -36,7 +37,7 @@ void usage(int exit_code = EX_USAGE);
 void process_file(char *filename);
 
 void classify_sequence(DNASequence &dna, ostringstream &koss, ostringstream &coss, ostringstream &uoss,
-                       uint64_t &seq_count);
+                       uint64_t &seq_count, bool is_bcl);
 
 void classify_partial_sequence(DNASequence &dna, uint32_t &call);
 
@@ -60,6 +61,8 @@ enum Input_mode {
 Input_mode File_input = FASTA;
 
 size_t length = -1;
+size_t first_cycle = 32;
+size_t step_size = 10;
 int max_tile = 2316;
 // ------------------------
 
@@ -211,7 +214,7 @@ void check_workunit(WorkUnit &unit){
     std::unordered_set<int> poses;
     std::unordered_set<std::shared_ptr<RunInfoContainer> > pointers;
 
-    for (auto& dna: unit){
+    for (auto& dna: unit.seqs){
         lengths.insert(dna.seq.size());
         poses.emplace(dna.readInfo->pos);
 //        pointers.insert(dna.runContainer);
@@ -259,7 +262,8 @@ void process_file(char *filename) {
         ostringstream kraken_output_ss, classified_output_ss, unclassified_output_ss;
 
         while (reader->is_valid()) {
-            work_unit.clear();
+            work_unit.seqs.clear();
+            work_unit.runContainer = nullptr;
             size_t total_nt = 0;
 #pragma omp critical(get_input)
             {
@@ -279,19 +283,15 @@ void process_file(char *filename) {
             // for BCL files, count individually
             uint64_t seq_count = 0; //= (File_input != BCL) ? work_unit.size() : 0;
 
-            std::cout << "Work unit size: " << work_unit.size() << "\n";
-            std::cout << "Sequence length: " << work_unit[0].seq.size() << " to " << work_unit.back().seq.size() << "\n";
-
-//            check_workunit(work_unit);
-
             uint64_t t1 = GetTimeMs64();
-            for (size_t j = 0; j < work_unit.size(); j++) {
-                classify_sequence(work_unit[j], kraken_output_ss, classified_output_ss,
-                                  unclassified_output_ss, seq_count);
+            for (size_t j = 0; j < work_unit.seqs.size(); j++) {
+                classify_sequence(work_unit.seqs[j], kraken_output_ss, classified_output_ss,
+                                  unclassified_output_ss, seq_count, work_unit.runContainer != nullptr);
             }
 
-            if (work_unit[0].runContainer){
-                work_unit[0].runContainer->increment_count(work_unit.size());
+            // signal to the reader how many tile sequences were processed
+            if (work_unit.runContainer){
+                work_unit.runContainer->increment_count(work_unit.seqs.size());
             }
 
            process_time += (GetTimeMs64() - t1);
@@ -317,7 +317,7 @@ void process_file(char *filename) {
 }
 
 void classify_sequence(DNASequence &dna, ostringstream &koss, ostringstream &coss, ostringstream &uoss,
-                       uint64_t &seq_count) {
+                       uint64_t &seq_count, bool is_bcl) {
     uint32_t call = 0;
 
     // classify the sequence we're given
@@ -327,7 +327,7 @@ void classify_sequence(DNASequence &dna, ostringstream &koss, ostringstream &cos
     // or if the BCL file was sufficiently accurately classified
     bool tax_call = check_tax_level(call, "genus", Parent_map, taxLevel_map);
 
-    if (!dna.runContainer || tax_call || dna.readInfo->pos >= length) {
+    if (!is_bcl || tax_call || dna.readInfo->pos >= length) {
         seq_count++;
         dna.readInfo->skip = true;
         classify_finalize(dna, koss, coss, uoss, call);
@@ -485,7 +485,7 @@ void parse_command_line(int argc, char **argv) {
 
     if (argc > 1 && strcmp(argv[1], "-h") == 0)
         usage(0);
-    while ((opt = getopt(argc, argv, "d:i:t:u:n:m:o:qfbC:U:Ml:x:")) != -1) {
+    while ((opt = getopt(argc, argv, "d:i:t:u:n:m:o:qfbC:U:Ml:s:k:x:")) != -1) {
         switch (opt) {
             case 'd' :
                 DB_filename = optarg;
@@ -548,6 +548,15 @@ void parse_command_line(int argc, char **argv) {
             case 'l' :
                 length = atoi(optarg);
                 break;
+            case 's' :
+                first_cycle = atoi(optarg);
+                if (first_cycle < 32) {
+                    errx(EX_USAGE, "Start cycle must be higher than 32.");
+                }
+                break;
+            case 'k' :
+                step_size = atoi(optarg);
+                break;
             case 'x' :
                 max_tile = atoi(optarg);
                 break;
@@ -589,6 +598,8 @@ void usage(int exit_code) {
          << "  -C filename      Print classified sequences" << endl
          << "  -U filename      Print unclassified sequences" << endl
          << "  -l length        Length of reads (BCL mode)" << endl
+         << "  -s start         Initial cycle to start classification (>31)" << endl
+         << "  -k spacing       How many cycles to wait between classification attempts." << endl
          << "  -x max_tile      Maximum tile number (BCL mode, e.g. 1116)" << endl
          << "  -f               Input is in FASTQ format" << endl
          << "  -b               Input is in BCL format" << endl

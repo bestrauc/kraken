@@ -84,8 +84,6 @@ struct RunInfoContainer{
 	void increment_count(uint64_t inc){
 		count += inc; // atomic increase
 
-		std::cout << count << " " << runsize << "\n";
-
 		uint64_t runsize_compare = runsize;
 		// Release run information for writing when all information has been updated.
 		// use atomic load and swap to not double unlock
@@ -103,10 +101,12 @@ struct DNASequence{
 
 	// only used for BCL reader, otherwise null
 	std::shared_ptr<SeqClassifyInfo> readInfo = std::make_shared<SeqClassifyInfo>();
-	std::shared_ptr<RunInfoContainer> runContainer;
 };
 
-typedef std::vector<DNASequence> WorkUnit;
+typedef struct {
+	std::shared_ptr<RunInfoContainer> runContainer;
+    std::vector<DNASequence> seqs;
+} WorkUnit;
 
 
 class DNASequenceReader {
@@ -123,7 +123,7 @@ public:
 				break;
 			}
 
-			work_unit.push_back(dna);
+			work_unit.seqs.push_back(dna);
 			total_nt += dna.seq.size();
 		}
 
@@ -162,7 +162,7 @@ private:
 
 class BCLReader : public DNASequenceReader {
 public:
-	typedef std::vector<DNASequence> TDNABuffer;
+//	typedef std::vector<DNASequence> WorkUnit;
 	typedef std::unordered_map<int, path> TTilePathMap;
 
 	//BCLReader(std::string filename);
@@ -188,7 +188,7 @@ private:
 	//std::unordered_map<int, std::unordered_map<int, std::mutex> > runInfoLocks;
 
 	// A list of progress for the reads of one tile
-	std::unique_ptr<TDNABuffer> sequenceBuffer;
+	std::unique_ptr<WorkUnit> sequenceBuffer;
 
 	// Threading data
 	// ------------------------
@@ -197,7 +197,7 @@ private:
 	std::atomic_uint process_status;
 
 	// Concurrent queues for the threads
-	Queue<std::unique_ptr<TDNABuffer> > concurrentBufferQueue;
+	Queue<std::unique_ptr<WorkUnit> > concurrentBufferQueue;
 	Queue<std::shared_ptr<RunInfoContainer> > concurrentRunInfoQueue;
 	//std::thread writerThread;
 
