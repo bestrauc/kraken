@@ -12,6 +12,7 @@ all: $(PROGS)
 debug: CXX += -DDEBUG -g
 debug: $(PROGS)
 
+install: CXX += -O3
 install: $(PROGS)
 	cp $(PROGS) $(KRAKEN_DIR)
 
@@ -25,8 +26,8 @@ db_sort: krakendb.o quickfile.o
 set_lcas: krakendb.o quickfile.o krakenutil.o seqreader.o filemanager.o
 	$(CXX) $(CXXFLAGS) $(LDFLAGS) set_lcas.cpp krakendb.o quickfile.o krakenutil.o seqreader.o filemanager.o -o set_lcas $(LOADLIBES) $(LDLIBS) -lboost_serialization -lboost_system -lboost_filesystem
 
-classify: classify.cpp krakendb.o quickfile.o krakenutil.o seqreader.o filemanager.o
-	$(CXX) $(CXXFLAGS) $(LDFLAGS) classify.cpp krakendb.o quickfile.o krakenutil.o seqreader.o filemanager.o -o classify $(LOADLIBES) $(LDLIBS) -lboost_serialization -lboost_system -lboost_filesystem
+classify: classify.cpp krakendb.o quickfile.o krakenutil.o seqreader.o bclreader.o filemanager.o
+	$(CXX) $(CXXFLAGS) $(LDFLAGS) classify.cpp krakendb.o quickfile.o krakenutil.o seqreader.o bclreader.o filemanager.o -o classify $(LOADLIBES) $(LDLIBS) -lboost_serialization -lboost_system -lboost_filesystem
 
 make_seqid_to_taxid_map: quickfile.o
 
@@ -36,8 +37,11 @@ krakenutil.o: krakenutil.cpp krakenutil.hpp
 krakendb.o: krakendb.cpp krakendb.hpp quickfile.hpp
 	$(CXX) $(CXXFLAGS) -c krakendb.cpp
 
-seqreader.o: seqreader.cpp seqreader.hpp quickfile.hpp filemanager.hpp
-	$(CXX) $(CXXFLAGS) -c seqreader.cpp 
+seqreader.o: seqreader.cpp bclreader.cpp seqreader.hpp quickfile.hpp filemanager.hpp
+	$(CXX) $(CXXFLAGS) -c seqreader.cpp
+
+bclreader.o: bclreader.cpp seqreader.hpp quickfile.hpp filemanager.hpp
+	$(CXX) $(CXXFLAGS) -c bclreader.cpp
 
 quickfile.o: quickfile.cpp quickfile.hpp
 	$(CXX) $(CXXFLAGS) -c quickfile.cpp
