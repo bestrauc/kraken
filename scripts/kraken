@@ -45,6 +45,11 @@ my $quick = 0;
 my $min_hits = 1;
 my $fasta_input = 0;
 my $fastq_input = 0;
+my $bcl_input = 0;
+my $bcl_run_length = 0;
+my $bcl_start = 0;
+my $bcl_spacing = 0;
+my $bcl_maxtile;
 my $db_prefix;
 my $threads;
 my $preload = 0;
@@ -64,6 +69,11 @@ GetOptions(
   "threads=i" => \$threads,
   "fasta-input" => \$fasta_input,
   "fastq-input" => \$fastq_input,
+  "bcl-input" => \$bcl_input,
+  "bcl-length=i" => \$bcl_run_length,
+  "bcl-start=i" => \$bcl_start,
+  "bcl-spacing=i" => \$bcl_spacing,
+  "bcl-maxtile=s" => \$bcl_maxtile,
   "quick" => \$quick,
   "min-hits=i" => \$min_hits,
   "unclassified-out=s" => \$unclassified_out,
@@ -76,6 +86,8 @@ GetOptions(
   "bzip2-compressed" => \$bunzip2,
   "only-classified-output" => \$only_classified_output,
 );
+
+my $file_sum = $fasta_input + $fastq_input + $bcl_input;
 
 if (! defined $threads) {
   $threads = $ENV{"KRAKEN_NUM_THREADS"} || 1;
@@ -116,20 +128,25 @@ my $compressed = $gunzip || $bunzip2;
 if ($gunzip && $bunzip2) {
   die "$PROG: can't use both gzip and bzip2 compression flags\n";
 }
-if ($fasta_input && $fastq_input) {
-  die "$PROG: can't use both FASTA and FASTQ input flags\n";
+if ($file_sum > 1) {
+  die "$PROG: can't use more than one of the FASTA, FASTQ or BCL input flags\n";
 }
 
 my $auto_detect = 1;
-if ($fasta_input || $fastq_input || $compressed) {
+if ($bcl_input || $fasta_input || $fastq_input || $compressed) {
   $auto_detect = 0;
 }
-if (! -f $ARGV[0]) {
+
+if ((! -f $ARGV[0]) && (! -d $ARGV[0])) {
   $auto_detect = 0;
+  print("$ARGV[0] is not a file or directory?");
 }
 if ($auto_detect) {
   auto_detect_file_format();
 }
+
+# check if bcl parameters are required (i.e. in BCL mode) and consistent
+check_bcl_parameters();
 
 # set flags for classifier
 my @flags;
@@ -140,6 +157,9 @@ push @flags, "-n", $taxonomy if defined $taxonomy;
 push @flags, "-q" if $quick;
 push @flags, "-m", $min_hits if $min_hits > 1;
 push @flags, "-f" if $fastq_input && ! $paired;  # merger always outputs FASTA
+push @flags, "-b" if $bcl_input;
+push @flags, "-l $bcl_run_length" if $bcl_run_length;
+push @flags, "-x $bcl_maxtile" if $bcl_maxtile;
 push @flags, "-U", $unclassified_out if defined $unclassified_out;
 push @flags, "-C", $classified_out if defined $classified_out;
 push @flags, "-o", $outfile if defined $outfile;
@@ -210,6 +230,10 @@ Options:
   --threads NUM           Number of threads (default: $def_thread_ct)
   --fasta-input           Input is FASTA format
   --fastq-input           Input is FASTQ format
+  --bcl-input             Input is BCL format
+  --bcl-length NUM        Number of sequencing cycles
+  --bcl-start NUM         First analysis cycle (>31)
+  --bcl-spacing NUM       Spacing between classification
   --gzip-compressed       Input is gzip compressed
   --bzip2-compressed      Input is bzip2 compressed
   --quick                 Quick operation (use first hit or hits)
@@ -250,6 +274,19 @@ sub auto_detect_file_format {
   my $magic;
   my $filename = $ARGV[0];
 
+  #print("Basename: ", basename($filename), "\n");
+
+  # for a directory called BaseCalls, assume BCL format (pretty conservative autodetection for now)
+  if (-d $filename) {
+    if (basename($filename) eq 'BaseCalls') {
+      $bcl_input = 1;
+      return;
+    }
+    else {
+      die "'$filename' is a directory, but BCL files should be in a 'BaseCalls' directory\n";
+    }
+  }
+
   # read 2-byte magic number to determine type of compression (if any)
   open FILE, "<", $filename;
   read FILE, $magic, 2;
@@ -289,5 +326,27 @@ sub auto_detect_file_format {
   }
   else {
     die "$PROG: can't determine what format $filename is!\n";
+  }
+}
+
+sub check_bcl_parameters {
+  if (!$bcl_input && ($bcl_run_length || $bcl_start || $bcl_spacing || $bcl_maxtile)) {
+    die "$PROG: BCL options require a BCL input format.\n";
+  }
+
+  if (!$bcl_start) {
+    $bcl_start = 32;
+  }
+
+  if (!$bcl_spacing) {
+    $bcl_spacing = 10;
+  }
+
+  if (!$bcl_maxtile) {
+    $bcl_maxtile = '1101';
+  }
+
+  if ($bcl_input && !$bcl_run_length){
+    die "$PROG: BCL input detected. Please specify the number of cycles using --bcl-length\n";
   }
 }
