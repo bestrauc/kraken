@@ -23,14 +23,11 @@
 #include "kraken_headers.hpp"
 #include "Queue.h"
 #include "filemanager.hpp"
-#include <boost/filesystem.hpp>
-//#include <boost/serialization/unordered_map.hpp>
-#include <boost/serialization/vector.hpp>
-#include <boost/archive/binary_oarchive.hpp>
-#include <boost/archive/binary_iarchive.hpp>
-#include <boost/serialization/shared_ptr.hpp>
-#include <condition_variable>
 
+//#include <boost/serialization/vector.hpp>
+//#include <boost/archive/binary_oarchive.hpp>
+//#include <boost/archive/binary_iarchive.hpp>
+//#include <boost/serialization/shared_ptr.hpp>
 
 
 using namespace boost::filesystem;
@@ -193,13 +190,10 @@ private:
 	// Threading data
 	// ------------------------
 	std::unordered_map<int, std::unordered_map<int, std::mutex> > writeLocks;
-	std::condition_variable processing_var;
-	std::atomic_uint process_status;
 
 	// Concurrent queues for the threads
 	Queue<std::unique_ptr<WorkUnit> > concurrentBufferQueue;
 	Queue<std::shared_ptr<RunInfoContainer> > concurrentRunInfoQueue;
-	//std::thread writerThread;
 
 	// Information about the state of the reader
 	bool valid,_valid;

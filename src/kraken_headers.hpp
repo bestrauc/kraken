@@ -53,14 +53,10 @@
 #include <algorithm>
 #include <memory>
 #include <iterator>
-#include <cassert>
-
 
 // Concurrency related headers
 #include <thread>
 #include <atomic>
 #include <mutex>
-#include <chrono>
-
 
 #endif

@@ -141,37 +141,6 @@ namespace kraken {
     return true;
   }
 
-  // Given a tile, advance it to the next tile number.
-  // (I.e. 1216 -> 1301 or 1316 -> 2101)
-  int getNextTile(int tile) {
-    // Get the components of the tile number
-    int i1 = tile / 1000;               // Flowcell side
-    int i2 = (tile - 1000 * i1) / 100;    // Swath of the cell on this side
-    int i3 = tile - 1000 * i1 - 100 * i2;   // One of 16 positions on this swath
-
-    int overflow = 0;
-
-    i3 += 1;
-    if (i3 > 16) {
-      i3 = 1;
-      overflow = 1;
-    }
-
-    i2 += overflow;
-    overflow = 0;
-    if (i2 > 3) {
-      i2 = 1;
-      overflow = 1;
-    }
-
-    i1 += overflow;
-    if (i1 > 2) {
-      return 0;
-    }
-
-    return i1 * 1000 + i2 * 100 + i3;
-  }
-
   //-----------------------------------------------------------
   //              BCL READER class
   //-----------------------------------------------------------
@@ -192,8 +161,7 @@ namespace kraken {
   }
 
   BCLReader::BCLReader(string file_name, int length, int max_tile)
-      : fileManager(file_name, length, max_tile),
-        process_status(0) {//, writerThread(&BCLReader::saveRunInfo, this) {
+      : fileManager(file_name, length, max_tile) { //, writerThread(&BCLReader::saveRunInfo, this) {
     this->init(file_name);
   }
 
