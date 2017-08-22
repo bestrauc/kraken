@@ -163,7 +163,8 @@ public:
 	typedef std::unordered_map<int, path> TTilePathMap;
 
 	//BCLReader(std::string filename);
-	BCLReader(std::string filename, int length, std::vector<int> target_tiles);
+	BCLReader(std::string filename, int length, int start_cycle, int step, std::vector<int> target_tiles,
+						std::vector<int> target_lanes);
 	DNASequence next_sequence();
     virtual size_t next_workunit(size_t work_nt_size, WorkUnit& work_unit);
 	bool is_valid();

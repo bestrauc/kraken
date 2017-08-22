@@ -63,6 +63,7 @@ size_t length = -1;
 size_t first_cycle = 32;
 size_t step_size = 10;
 vector<int> target_tiles;
+vector<int> target_lanes;
 // ------------------------
 
 bool Print_classified = false;
@@ -218,7 +219,7 @@ void process_file(char *filename) {
     else if (File_input == FASTA)
         reader = new FastaReader(file_str, length);
     else if (File_input == BCL)
-        reader = new BCLReader(file_str, length, target_tiles);
+        reader = new BCLReader(file_str, length, first_cycle, step_size, target_tiles, target_lanes);
     else {
         cerr << "File type not recognized\n";
     }
@@ -459,7 +460,7 @@ void parse_command_line(int argc, char **argv) {
 
     if (argc > 1 && strcmp(argv[1], "-h") == 0)
         usage(0);
-    while ((opt = getopt(argc, argv, "d:i:t:u:n:m:o:qfbC:U:Ml:s:k:x:")) != -1) {
+    while ((opt = getopt(argc, argv, "d:i:t:u:n:m:o:qfbC:U:Ml:s:k:x:y:")) != -1) {
         switch (opt) {
             case 'd' :
                 DB_filename = optarg;
@@ -534,6 +535,9 @@ void parse_command_line(int argc, char **argv) {
             case 'x' :
                 target_tiles.push_back(atoi(optarg));
                 break;
+            case 'y' :
+                target_lanes.push_back(atoi(optarg));
+                break;
             default:
                 usage();
                 break;
@@ -574,7 +578,8 @@ void usage(int exit_code) {
          << "  -l length        Length of reads (BCL mode)" << endl
          << "  -s start         Initial cycle to start classification (>31)" << endl
          << "  -k spacing       How many cycles to wait between classification attempts." << endl
-         << "  -x max_tile      Maximum tile number (BCL mode, e.g. 1116)" << endl
+         << "  -x tiles         Tiles to analyze (can be passed multiple times). Default: all tiles" << endl
+         << "  -y lanes         Lanes to analyze (can be passed multiple times). Default: all lanes" << endl
          << "  -f               Input is in FASTQ format" << endl
          << "  -b               Input is in BCL format" << endl
          << "  -c               Only include classified reads in output" << endl

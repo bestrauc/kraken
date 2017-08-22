@@ -160,8 +160,10 @@ namespace kraken {
     //fileManager.cyclePaths.size()
   }
 
-  BCLReader::BCLReader(string file_name, int length, std::vector<int> target_tiles)
-      : fileManager(file_name, length, target_tiles) { //, writerThread(&BCLReader::saveRunInfo, this) {
+  BCLReader::BCLReader(std::string file_name, int length, int start_cycle, int step,
+                       std::vector<int> target_tiles, std::vector<int> target_lanes)
+      : fileManager(file_name, length, start_cycle, step, target_tiles, target_lanes) {
+    //, writerThread(&BCLReader::saveRunInfo, this) {
     this->init(file_name);
   }
 
@@ -269,7 +271,7 @@ namespace kraken {
     // Process current tile in each cycle directory.
     for (int i = tile.first_cycle; i < tile.last_cycle; ++i) {
       string s(fileManager.cyclePaths[tile.lane_num - 1][i].string() + tile_str + ".bcl");
-//		std::cout << s << "\n";
+//      std::cout << s << " - \n";
 
       // Add bases of tile in the current cycle to the buffered reads.
       if (scanTile(tile.tile_num, path(s), runMap[tile.lane_num][tile.tile_num],

@@ -18,7 +18,8 @@ struct TileInfo{
 
 class BCLFileManager {
 public:
-	BCLFileManager(std::string basecalls_folder, int length, std::vector<int> target_tiles);
+	BCLFileManager(std::string basecalls_folder, int length, int start_cycle, int step,
+								 std::vector<int> _target_tiles, std::vector<int> _target_lanes);
 	TileInfo getTile();
 
 	bool is_valid();
@@ -30,22 +31,21 @@ public:
 
 	// remember the last cycle we processed the tile in
 	std::unordered_map<int, int> lastTileCycle;
-	std::queue<int> active_lanes;
+	int cycle_position = 0;
+  int target_cycle = 32;
 private:
-
 	path basecalls_path;
 	std::vector<path> lanePaths;
 	std::vector<int> target_tiles;
+	std::vector<int> target_lanes;
 	std::vector<int>::iterator active_tile;
+	std::vector<int>::iterator active_lane;
 
-	int active_lane = 1;
 	int length;
-	int start_step = 30;
 	int step = 10;
-//	int step = 200;
 
 	// set to true initially, will be made false when we don't reach the end
-	bool end_reached = true;
+	bool end_reached = false;
 
 	bool valid = true;
 
