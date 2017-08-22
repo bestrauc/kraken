@@ -160,8 +160,8 @@ namespace kraken {
     //fileManager.cyclePaths.size()
   }
 
-  BCLReader::BCLReader(string file_name, int length, int max_tile)
-      : fileManager(file_name, length, max_tile) { //, writerThread(&BCLReader::saveRunInfo, this) {
+  BCLReader::BCLReader(string file_name, int length, std::vector<int> target_tiles)
+      : fileManager(file_name, length, target_tiles) { //, writerThread(&BCLReader::saveRunInfo, this) {
     this->init(file_name);
   }
 

@@ -21,9 +21,8 @@
 #include "krakendb.hpp"
 #include "krakenutil.hpp"
 #include "quickfile.hpp"
-#include "seqreader.hpp"
-#include <unordered_set>
 //#include "seqreader.hpp"
+#include <unordered_set>
 
 const size_t DEF_WORK_UNIT_SIZE = 500000;
 
@@ -63,7 +62,7 @@ Input_mode File_input = FASTA;
 size_t length = -1;
 size_t first_cycle = 32;
 size_t step_size = 10;
-int max_tile = 2316;
+vector<int> target_tiles;
 // ------------------------
 
 bool Print_classified = false;
@@ -209,31 +208,6 @@ void report_stats(struct timeval time1, struct timeval time2) {
             (total_sequences - total_classified) * 100.0 / total_sequences);
 }
 
-void check_workunit(WorkUnit &unit){
-    std::unordered_set<int> lengths;
-    std::unordered_set<int> poses;
-    std::unordered_set<std::shared_ptr<RunInfoContainer> > pointers;
-
-    for (auto& dna: unit.seqs){
-        lengths.insert(dna.seq.size());
-        poses.emplace(dna.readInfo->pos);
-//        pointers.insert(dna.runContainer);
-    }
-
-    std::cout << "Found sizes: \n";
-    for (const auto &elem : lengths)
-        std::cout << elem << " ";
-
-    std::cout << "\nFound poses: \n";
-    for (const auto &elem : poses)
-        std::cout << elem << " ";
-
-/*    std::cout << "\nFound pointers: \n";
-    for (const auto &elem : pointers)
-        std::cout << elem << " ";
-    std::cout << "\n";*/
-}
-
 void process_file(char *filename) {
     string file_str(filename);
     DNASequenceReader *reader;
@@ -244,7 +218,7 @@ void process_file(char *filename) {
     else if (File_input == FASTA)
         reader = new FastaReader(file_str, length);
     else if (File_input == BCL)
-        reader = new BCLReader(file_str, length, max_tile);
+        reader = new BCLReader(file_str, length, target_tiles);
     else {
         cerr << "File type not recognized\n";
     }
@@ -558,7 +532,7 @@ void parse_command_line(int argc, char **argv) {
                 step_size = atoi(optarg);
                 break;
             case 'x' :
-                max_tile = atoi(optarg);
+                target_tiles.push_back(atoi(optarg));
                 break;
             default:
                 usage();
