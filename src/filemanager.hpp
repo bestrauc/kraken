@@ -35,10 +35,11 @@ private:
 
 	path basecalls_path;
 	std::vector<path> lanePaths;
-	int active_tile = 1101;
+	std::vector<int> target_tiles;
+	std::vector<int>::iterator active_tile;
+
 	int active_lane = 1;
 	int length;
-	std::vector<int> target_tiles;
 	int start_step = 30;
 	int step = 10;
 //	int step = 200;
