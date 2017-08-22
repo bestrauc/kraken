@@ -4,6 +4,7 @@ src/db_shrink
 src/db_sort
 src/make_seqid_to_taxid_map
 src/set_lcas
+build
 
 ### CLion specific ignores
 # User-specific stuff:
@@ -19,3 +20,7 @@ src/set_lcas
 .idea/**/sqlDataSources.xml
 .idea/**/dynamic.xml
 .idea/**/uiDesigner.xml
+
+#CMake
+cmake-build-debug
+cmake-build-release
