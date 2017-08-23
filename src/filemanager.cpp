@@ -53,7 +53,8 @@ namespace kraken {
 
   BCLFileManager::BCLFileManager(std::string basecalls_folder, int length, int start_cycle, int step,
                                  std::vector<int> _target_tiles, std::vector<int> _target_lanes)
-      : length(length), target_tiles(_target_tiles), target_lanes(_target_lanes), target_cycle(start_cycle), step(step) {
+      : length(length), target_tiles(_target_tiles), target_lanes(_target_lanes), target_cycle(start_cycle),
+        step(step) {
     basecalls_path = fs::path(basecalls_folder);
 
     if (!fs::exists(basecalls_path)) {
@@ -68,14 +69,6 @@ namespace kraken {
     // Scan target directory and get all paths for each of the lane folders.
     this->getFilePaths();
 
-    if (this->target_lanes.empty()) {
-      for (int i = 1; i <= lanePaths.size(); ++i)
-        this->target_lanes.push_back(i);
-    }
-
-    std::cout << this->target_lanes.size() << " ?\n";
-
-    active_lane = this->target_lanes.begin();
   }
 
   bool BCLFileManager::is_valid() {
@@ -118,8 +111,6 @@ namespace kraken {
 
     // return the [start,end] cycle indices as TileInfo, with tile and lane
     TileInfo ret = {*active_lane, *active_tile, cycle_position, target_cycle + end_reached};
-//    std::cout << "Lane: " << *active_lane << " " << *active_tile << " " << cycle_position
-//              << " " << target_cycle+end_reached << "\n";
 
     active_tile++;
 
@@ -127,31 +118,54 @@ namespace kraken {
   }
 
   void BCLFileManager::getFilePaths() {
+    // copy those directories to the lanePaths vector that start with 'L'
     copy_if(directory_iterator(basecalls_path), directory_iterator(), back_inserter(lanePaths),
             [&](const fs::path &p) {
                 return (p.filename().string()[0] == 'L');
             }
     );
 
-//    std::cout << "Following target tiles: \n";
-//    copy(this->target_tiles.begin(), this->target_tiles.end(), std::ostream_iterator<int>(std::cout, "\n"));
-
     sort(lanePaths.begin(), lanePaths.end());
 
-    for (fs::path &path : lanePaths) {
+    // Get paths to all cycles in all lanes.
+    for (fs::path &lane_path : lanePaths) {
       cyclePaths.push_back(std::vector<fs::path>());
 
       for (int i = 1; i <= length; ++i) {
-        fs::path tmp(path);
+        fs::path tmp(lane_path);
         tmp += ("/C" + std::to_string(i) + ".1");
-//        std::cout << tmp << "\n";
         cyclePaths.back().push_back(tmp);
       }
     }
 
-    int lanes = lanePaths.size();
-    std::cout << "Found " << lanes << (lanes == 1 ? " lane directory." : " lane directories.") << "\n";
-    copy(lanePaths.begin(), lanePaths.end(), std::ostream_iterator<fs::path>(std::cout, "\n"));
+    // collect the lane numbers into a set
+    // assumption: LXXX where XXX is the lane number
+    std::unordered_map<int, int> lane_numbers;
+    for (int i=0; i < lanePaths.size(); ++i) {
+      int lane_num = std::stoi(lanePaths[i].filename().string().substr(1));
+      lane_numbers[lane_num] = i+1;
+    }
+
+    std::vector<int> lane_selection;
+
+    // check if target lanes exist
+    for (int lane_num : target_lanes) {
+      if (lane_numbers.count(lane_num) == 0) {
+        copy(lanePaths.begin(), lanePaths.end(), std::ostream_iterator<fs::path>(std::cout, "\n"));
+        errx(EX_NOINPUT, "Lane %i was not found. Please only select from existing lanes shown above", lane_num);
+      }
+      else{
+        lane_selection.push_back(lane_numbers[lane_num]);
+      }
+    }
+
+    // if no target lanes were specified, use all existing ones
+    if (lane_selection.empty()) {
+      for (int i = 1; i <= lanePaths.size(); ++i)
+        lane_selection.push_back(i);
+    }
+
+    target_lanes = lane_selection;
 
     // if no target tiles given, iterate through all tiles
     if (target_tiles.empty()) {
@@ -161,6 +175,15 @@ namespace kraken {
       } while (tile = getNextTile(tile));
     }
 
+
+    // Output the Lane numbers we are going to analyze.
+    int lanes = target_lanes.size();
+    std::cout << "Using " << lanes << (lanes == 1 ? " lane directory." : " lane directories.") << "\n";
+    copy(target_lanes.begin(), target_lanes.end(), std::ostream_iterator<int>(std::cout, " "));
+    std::cout << std::endl;
+
+    // initialize file manager state by pointing at the first lanes/tiles to analyze
+    active_lane = target_lanes.begin();
     active_tile = target_tiles.begin();
 
 /*    std::cout << "Setting up paths for temporary directories.\n";

@@ -532,11 +532,19 @@ void parse_command_line(int argc, char **argv) {
             case 'k' :
                 step_size = atoi(optarg);
                 break;
-            case 'x' :
-                target_tiles.push_back(atoi(optarg));
+            case 'x' : {
+                int tile = atoi(optarg);
+                // don't add duplicates
+                if (std::find(target_tiles.begin(), target_tiles.end(), tile) == target_tiles.end())
+                  target_tiles.push_back(tile);
+            }
                 break;
-            case 'y' :
-                target_lanes.push_back(atoi(optarg));
+            case 'y' : {
+                int lane = atoi(optarg);
+                // don't add duplicates
+                if (std::find(target_lanes.begin(), target_lanes.end(), lane) == target_lanes.end())
+                  target_lanes.push_back(lane);
+            }
                 break;
             default:
                 usage();
