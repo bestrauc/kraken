@@ -79,9 +79,9 @@ unordered_map<uint32_t, string> taxLevel_map;
 KrakenDB Database;
 string Classified_output_file, Unclassified_output_file, Kraken_output_file;
 
-ostream *Classified_output;
-ostream *Unclassified_output;
-ostream *Kraken_output;
+typedef std::tuple<ostream*, ostream*, ostream*> StreamTuple;
+std::unordered_map<int, StreamTuple> fileMap;
+
 size_t Work_unit_size = DEF_WORK_UNIT_SIZE;
 
 uint64_t total_classified = 0;
@@ -122,28 +122,44 @@ uint64_t GetTimeMs64() {
 #endif
 }
 
-void create_output_files() {
-     if (Print_classified) {
-        if (Classified_output_file == "-")
-            Classified_output = &cout;
-        else
-            Classified_output = new std::ofstream(Classified_output_file.c_str());
+StreamTuple select_output_files(int index) {
+    if (!output_all)
+        index = 0;
+
+    // open files if they do not exist yet
+    if (fileMap.count(index) == 0) {
+        ostream *Classified_output, *Unclassified_output, *Kraken_output;
+
+        std::string suffix = (index == 0) ? std::string("") : ('_' + std::to_string(index));
+
+        if (Print_classified) {
+            if (Classified_output_file == "-")
+                Classified_output = &cout;
+            else
+                Classified_output = new std::ofstream((Classified_output_file + suffix).c_str());
+        }
+
+        if (Print_unclassified) {
+            if (Unclassified_output_file == "-")
+                Unclassified_output = &cout;
+            else
+                Unclassified_output = new std::ofstream((Unclassified_output_file + suffix).c_str());
+        }
+
+        if (!Kraken_output_file.empty()) {
+            if (Kraken_output_file == "-")
+                Print_kraken = false;
+            else
+                Kraken_output = new std::ofstream((Kraken_output_file + suffix).c_str());
+        } else
+            Kraken_output = &cout;
+
+        auto file_tuple = std::make_tuple(Classified_output, Unclassified_output, Kraken_output);
+        fileMap[index] = file_tuple;
     }
 
-    if (Print_unclassified) {
-        if (Unclassified_output_file == "-")
-            Unclassified_output = &cout;
-        else
-            Unclassified_output = new std::ofstream(Unclassified_output_file.c_str());
-    }
-
-    if (!Kraken_output_file.empty()) {
-        if (Kraken_output_file == "-")
-            Print_kraken = false;
-        else
-            Kraken_output = new std::ofstream(Kraken_output_file.c_str());
-    } else
-        Kraken_output = &cout;
+    // return files for this length
+    return fileMap[index];
 }
 
 int main(int argc, char **argv) {
@@ -176,7 +192,7 @@ int main(int argc, char **argv) {
     if (Populate_memory)
         cerr << "complete." << endl;
 
-    create_output_files();
+//    create_output_files();
 
     struct timeval tv1, tv2;
     gettimeofday(&tv1, NULL);
@@ -184,7 +200,7 @@ int main(int argc, char **argv) {
         process_file(argv[i]);
     gettimeofday(&tv2, NULL);
 
-    Kraken_output->flush();
+//    Kraken_output->flush();
 
     report_stats(tv1, tv2);
 
@@ -268,7 +284,7 @@ void process_file(char *filename) {
             for (size_t j = 0; j < work_unit.seqs.size(); j++) {
                 classify_sequence(work_unit.seqs[j], kraken_output_ss, classified_output_ss,
                                   unclassified_output_ss, seq_count);
-                std::cout << work_unit.seqs[j].readInfo->processed_len << "\n";
+//                std::cout << work_unit.seqs[j].readInfo->processed_len << "\n";
             }
 
             // signal to the reader how many tile sequences were processed
@@ -281,6 +297,9 @@ void process_file(char *filename) {
 #pragma omp critical(write_output)
             {
                 // only create output files here, name according to processed lengths
+                ostream *Classified_output, *Unclassified_output, *Kraken_output;
+                std::tie(Classified_output, Unclassified_output, Kraken_output)
+                    = select_output_files(work_unit.seqs[0].readInfo->processed_len);
 
                 if (Print_kraken)
                     (*Kraken_output) << kraken_output_ss.str();
@@ -309,9 +328,12 @@ void classify_sequence(DNASequence &dna, ostringstream &koss, ostringstream &cos
 
     // we can finalize if: Full fasta or fastq sequence given and called
     // or if the BCL file was sufficiently accurately classified
-    bool tax_call = check_tax_level(call, "genus", Parent_map, taxLevel_map);
+    // false at the moment since we do not stop classifying early
+//    bool tax_call = check_tax_level(call, "genus", Parent_map, taxLevel_map);
 
-    if (File_input != BCL || tax_call || dna.readInfo->processed_len >= length) {
+    // TODO: simplify this conditional
+    // finalize if not a BCL file, if full sequence length was reached or if we always output at all steps
+    if (File_input != BCL || dna.readInfo->processed_len >= length || output_all) {
         seq_count++;
         classify_finalize(dna, koss, coss, uoss, call);
     }
@@ -468,7 +490,7 @@ void parse_command_line(int argc, char **argv) {
 
     if (argc > 1 && strcmp(argv[1], "-h") == 0)
         usage(0);
-    while ((opt = getopt(argc, argv, "a:d:i:t:u:n:m:o:qfbC:U:Ml:s:k:x:y:")) != -1) {
+    while ((opt = getopt(argc, argv, "ad:i:t:u:n:m:o:qfbC:U:Ml:s:k:x:y:")) != -1) {
         switch (opt) {
             case 'a' :
                 output_all = true;
