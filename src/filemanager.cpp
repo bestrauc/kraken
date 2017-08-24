@@ -175,7 +175,6 @@ namespace kraken {
       } while (tile = getNextTile(tile));
     }
 
-
     // Output the Lane numbers we are going to analyze.
     int lanes = target_lanes.size();
     std::cout << "Using " << lanes << (lanes == 1 ? " lane directory." : " lane directories.") << "\n";

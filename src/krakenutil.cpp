@@ -235,8 +235,6 @@ namespace kraken {
     if (pos2 - pos1 + 1 < k && !extend) {
       curr_pos = pos2;
     }
-
-    //std::cout << seq << " " << start << " "  << finish << " " << pos1 << " " << curr_pos << " " << loaded_nt << " " << pos2 << "\n";
   }
 
   uint8_t KmerScanner::get_k() { return k; }

@@ -21,6 +21,7 @@
 #include "krakendb.hpp"
 #include "krakenutil.hpp"
 #include "quickfile.hpp"
+#include "seqreader.hpp"
 //#include "seqreader.hpp"
 #include <unordered_set>
 
@@ -35,13 +36,13 @@ void usage(int exit_code = EX_USAGE);
 
 void process_file(char *filename);
 
-void classify_sequence(DNASequence &dna, ostringstream &koss, ostringstream &coss, ostringstream &uoss,
-                       uint64_t &seq_count, bool is_bcl);
+void
+classify_sequence(DNASequence &dna, ostringstream &koss, ostringstream &coss, ostringstream &uoss, uint64_t &seq_count);
 
 void classify_partial_sequence(DNASequence &dna, uint32_t &call);
 
-void classify_finalize(DNASequence &dna, ostringstream &koss,
-                       ostringstream &coss, ostringstream &uoss, uint32_t call);
+void classify_finalize(const DNASequence &dna, ostringstream &koss,
+                       ostringstream &coss, ostringstream &uoss, const uint32_t call);
 
 string hitlist_string(vector<uint32_t> &taxa, vector<uint8_t> &ambig);
 
@@ -52,6 +53,7 @@ void report_stats(struct timeval time1, struct timeval time2);
 int Num_threads = 1;
 string DB_filename, Index_filename, Nodes_filename;
 bool Quick_mode = false;
+bool output_all = false;
 
 // Kraken modifications here
 enum Input_mode {
@@ -76,6 +78,7 @@ unordered_map<uint32_t, uint32_t> Parent_map;
 unordered_map<uint32_t, string> taxLevel_map;
 KrakenDB Database;
 string Classified_output_file, Unclassified_output_file, Kraken_output_file;
+
 ostream *Classified_output;
 ostream *Unclassified_output;
 ostream *Kraken_output;
@@ -119,6 +122,29 @@ uint64_t GetTimeMs64() {
 #endif
 }
 
+void create_output_files() {
+     if (Print_classified) {
+        if (Classified_output_file == "-")
+            Classified_output = &cout;
+        else
+            Classified_output = new std::ofstream(Classified_output_file.c_str());
+    }
+
+    if (Print_unclassified) {
+        if (Unclassified_output_file == "-")
+            Unclassified_output = &cout;
+        else
+            Unclassified_output = new std::ofstream(Unclassified_output_file.c_str());
+    }
+
+    if (!Kraken_output_file.empty()) {
+        if (Kraken_output_file == "-")
+            Print_kraken = false;
+        else
+            Kraken_output = new std::ofstream(Kraken_output_file.c_str());
+    } else
+        Kraken_output = &cout;
+}
 
 int main(int argc, char **argv) {
 #ifdef _OPENMP
@@ -150,27 +176,7 @@ int main(int argc, char **argv) {
     if (Populate_memory)
         cerr << "complete." << endl;
 
-    if (Print_classified) {
-        if (Classified_output_file == "-")
-            Classified_output = &cout;
-        else
-            Classified_output = new std::ofstream(Classified_output_file.c_str());
-    }
-
-    if (Print_unclassified) {
-        if (Unclassified_output_file == "-")
-            Unclassified_output = &cout;
-        else
-            Unclassified_output = new std::ofstream(Unclassified_output_file.c_str());
-    }
-
-    if (!Kraken_output_file.empty()) {
-        if (Kraken_output_file == "-")
-            Print_kraken = false;
-        else
-            Kraken_output = new std::ofstream(Kraken_output_file.c_str());
-    } else
-        Kraken_output = &cout;
+    create_output_files();
 
     struct timeval tv1, tv2;
     gettimeofday(&tv1, NULL);
@@ -261,7 +267,8 @@ void process_file(char *filename) {
             uint64_t t1 = GetTimeMs64();
             for (size_t j = 0; j < work_unit.seqs.size(); j++) {
                 classify_sequence(work_unit.seqs[j], kraken_output_ss, classified_output_ss,
-                                  unclassified_output_ss, seq_count, work_unit.runContainer != nullptr);
+                                  unclassified_output_ss, seq_count);
+                std::cout << work_unit.seqs[j].readInfo->processed_len << "\n";
             }
 
             // signal to the reader how many tile sequences were processed
@@ -273,6 +280,8 @@ void process_file(char *filename) {
 
 #pragma omp critical(write_output)
             {
+                // only create output files here, name according to processed lengths
+
                 if (Print_kraken)
                     (*Kraken_output) << kraken_output_ss.str();
                 if (Print_classified)
@@ -291,8 +300,8 @@ void process_file(char *filename) {
     delete reader;
 }
 
-void classify_sequence(DNASequence &dna, ostringstream &koss, ostringstream &coss, ostringstream &uoss,
-                       uint64_t &seq_count, bool is_bcl) {
+void classify_sequence(DNASequence &dna, ostringstream &koss, ostringstream &coss,
+                       ostringstream &uoss, uint64_t &seq_count) {
     uint32_t call = 0;
 
     // classify the sequence we're given
@@ -302,9 +311,8 @@ void classify_sequence(DNASequence &dna, ostringstream &koss, ostringstream &cos
     // or if the BCL file was sufficiently accurately classified
     bool tax_call = check_tax_level(call, "genus", Parent_map, taxLevel_map);
 
-    if (!is_bcl || tax_call || dna.readInfo->pos >= length) {
+    if (File_input != BCL || tax_call || dna.readInfo->processed_len >= length) {
         seq_count++;
-        dna.readInfo->skip = true;
         classify_finalize(dna, koss, coss, uoss, call);
     }
 }
@@ -361,8 +369,8 @@ void classify_partial_sequence(DNASequence &dna, uint32_t &call) {
     }
 }
 
-void classify_finalize(DNASequence &dna, ostringstream &koss,
-                       ostringstream &coss, ostringstream &uoss, uint32_t call) {
+void classify_finalize(const DNASequence &dna, ostringstream &koss,
+                       ostringstream &coss, ostringstream &uoss, const uint32_t call) {
 
     if (call)
 #pragma omp atomic
@@ -460,8 +468,11 @@ void parse_command_line(int argc, char **argv) {
 
     if (argc > 1 && strcmp(argv[1], "-h") == 0)
         usage(0);
-    while ((opt = getopt(argc, argv, "d:i:t:u:n:m:o:qfbC:U:Ml:s:k:x:y:")) != -1) {
+    while ((opt = getopt(argc, argv, "a:d:i:t:u:n:m:o:qfbC:U:Ml:s:k:x:y:")) != -1) {
         switch (opt) {
+            case 'a' :
+                output_all = true;
+                break;
             case 'd' :
                 DB_filename = optarg;
                 break;
@@ -573,6 +584,7 @@ void usage(int exit_code) {
     cerr << "Usage: classify [options] <fasta/fastq file(s)>" << endl
          << endl
          << "Options: (*mandatory)" << endl
+         << "  -a               output at all classification steps" << endl
          << "* -d filename      Kraken DB filename" << endl
          << "* -i filename      Kraken DB index filename" << endl
          << "  -n filename      NCBI Taxonomy nodes file" << endl

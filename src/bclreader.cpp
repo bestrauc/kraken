@@ -122,7 +122,6 @@ namespace kraken {
             seqClassifyInfo.at(rev_index) = make_shared<SeqClassifyInfo>();
 
           buffer->seqs.at(rev_index).readInfo = seqClassifyInfo.at(rev_index);
-          seqClassifyInfo.at(rev_index)->pos = runInfo->processed_nt;
         }
 
         // Save the qualities into the read buffer.
