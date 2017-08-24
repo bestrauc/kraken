@@ -37,12 +37,12 @@ void usage(int exit_code = EX_USAGE);
 void process_file(char *filename);
 
 void
-classify_sequence(DNASequence &dna, ostringstream &koss, ostringstream &coss, ostringstream &uoss, uint64_t &seq_count);
+classify_sequence(DNASequence &dna, ostringstream &koss, ostringstream &coss, ostringstream &uoss);
 
 void classify_partial_sequence(DNASequence &dna, uint32_t &call);
 
-void classify_finalize(const DNASequence &dna, ostringstream &koss,
-                       ostringstream &coss, ostringstream &uoss, const uint32_t call);
+void classify_finalize(const DNASequence &dna, ostringstream &koss, ostringstream &coss, ostringstream &uoss,
+                       const uint32_t call, bool record_stats);
 
 string hitlist_string(vector<uint32_t> &taxa, vector<uint8_t> &ambig);
 
@@ -122,9 +122,10 @@ uint64_t GetTimeMs64() {
 #endif
 }
 
-StreamTuple select_output_files(int index) {
-    if (!output_all)
-        index = 0;
+StreamTuple select_output_files(std::shared_ptr<RunInfoContainer> runInfo) {
+    int index = (!runInfo || !output_all) ? 0 : runInfo->processed_nt;
+//    if (!output_all)
+//        index = 0;
 
     // open files if they do not exist yet
     if (fileMap.count(index) == 0) {
@@ -277,14 +278,14 @@ void process_file(char *filename) {
             unclassified_output_ss.str("");
 
             // sequence count for this batch of reads
-            // for BCL files, count individually
-            uint64_t seq_count = 0; //= (File_input != BCL) ? work_unit.size() : 0;
+            uint64_t seq_count = 0;
+            if (File_input != BCL || work_unit.runContainer->processed_nt >= length) {
+                seq_count = work_unit.seqs.size();
+            }
 
             uint64_t t1 = GetTimeMs64();
             for (size_t j = 0; j < work_unit.seqs.size(); j++) {
-                classify_sequence(work_unit.seqs[j], kraken_output_ss, classified_output_ss,
-                                  unclassified_output_ss, seq_count);
-//                std::cout << work_unit.seqs[j].readInfo->processed_len << "\n";
+                classify_sequence(work_unit.seqs[j], kraken_output_ss, classified_output_ss, unclassified_output_ss);
             }
 
             // signal to the reader how many tile sequences were processed
@@ -299,7 +300,7 @@ void process_file(char *filename) {
                 // only create output files here, name according to processed lengths
                 ostream *Classified_output, *Unclassified_output, *Kraken_output;
                 std::tie(Classified_output, Unclassified_output, Kraken_output)
-                    = select_output_files(work_unit.seqs[0].readInfo->processed_len);
+                    = select_output_files(work_unit.runContainer);
 
                 if (Print_kraken)
                     (*Kraken_output) << kraken_output_ss.str();
@@ -319,8 +320,7 @@ void process_file(char *filename) {
     delete reader;
 }
 
-void classify_sequence(DNASequence &dna, ostringstream &koss, ostringstream &coss,
-                       ostringstream &uoss, uint64_t &seq_count) {
+void classify_sequence(DNASequence &dna, ostringstream &koss, ostringstream &coss, ostringstream &uoss) {
     uint32_t call = 0;
 
     // classify the sequence we're given
@@ -333,9 +333,10 @@ void classify_sequence(DNASequence &dna, ostringstream &koss, ostringstream &cos
 
     // TODO: simplify this conditional
     // finalize if not a BCL file, if full sequence length was reached or if we always output at all steps
-    if (File_input != BCL || dna.readInfo->processed_len >= length || output_all) {
-        seq_count++;
-        classify_finalize(dna, koss, coss, uoss, call);
+    bool is_bcl = File_input != BCL;
+    bool full_length = dna.readInfo->processed_len >= length;
+    if (is_bcl || full_length || output_all) {
+        classify_finalize(dna, koss, coss, uoss, call, is_bcl || full_length);
     }
 }
 
@@ -391,10 +392,10 @@ void classify_partial_sequence(DNASequence &dna, uint32_t &call) {
     }
 }
 
-void classify_finalize(const DNASequence &dna, ostringstream &koss,
-                       ostringstream &coss, ostringstream &uoss, const uint32_t call) {
+void classify_finalize(const DNASequence &dna, ostringstream &koss, ostringstream &coss, ostringstream &uoss,
+                       const uint32_t call, bool record_stats) {
 
-    if (call)
+    if (call && record_stats)
 #pragma omp atomic
         total_classified++;
 

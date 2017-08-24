@@ -74,7 +74,7 @@ struct RunInfoContainer{
 
 	int lane_num;
 	int tile_num;
-	int processed_nt = 0;
+	size_t processed_nt = 0;
 
 
 	void increment_count(uint64_t inc){
